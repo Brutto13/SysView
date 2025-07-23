@@ -34,12 +34,55 @@ computer = Hardware.Computer()
 computer.IsCpuEnabled = True
 computer.IsGpuEnabled = True
 computer.IsMotherboardEnabled = False
-computer.IsMemoryEnabled = False
+computeremoryEnabled = False
 computer.IsStorageEnabled = False
 computer.Open()
 
+
+def get_sensor_data(computer):
+    sensor_info = {}
+
+    for hw in computer.Hardware:
+        hw.Update()
+        name = hw.Name
+
+        sensor_info[name] = {}
+
+        for sensor in hw.Sensors:
+            stype = str(sensor.SensorType)
+            sname = sensor.Name
+            svalue = sensor.Value
+
+            if sensor.SensorType in (
+                Hardware.SensorType.Temperature,
+                Hardware.SensorType.Voltage,
+                Hardware.SensorType.Power,
+                Hardware.SensorType.Clock,
+                Hardware.SensorType.Fan
+            ):
+                sensor_info[name][f"{stype}: {sname}"] = svalue
+
+        for sub in hw.SubHardware:
+            sub.Update()
+            for sensor in sub.Sensors:
+                stype = str(sensor.SensorType)
+                sname = sensor.Name
+                svalue = sensor.Value
+
+                if sensor.SensorType in (
+                    Hardware.SensorType.Temperature,
+                    Hardware.SensorType.Voltage,
+                    Hardware.SensorType.Power,
+                    Hardware.SensorType.Clock,
+                    Hardware.SensorType.Fan
+                ):
+                    sensor_info[name][f"{stype}: {sname}"] = svalue
+
+    # computer.Close()
+    return sensor_info
+
 # Constants
-TITLE = "SysView 0.0.0"
+TITLE = "SysView 1.0.0"
 
 # Global Variables
 cpu_temps: list[float] = [0]
@@ -77,14 +120,29 @@ def get_gpu_clock_color(value: float | int) -> str:
     else: return "green"
 
 
+# def get_cpu_name():
+#     try:
+#         output = subprocess.check_output(
+#             "wmic cpu get Name", shell=True
+#         ).decode(errors="ignore").split("\n")[1].strip()
+#         return output or "Unknown"
+#     except Exception:
+#         return "Not available"
+
 def get_cpu_name():
-    try:
-        output = subprocess.check_output(
-            "wmic cpu get Name", shell=True
-        ).decode(errors="ignore").split("\n")[1].strip()
-        return output or "Unknown"
-    except Exception:
-        return "Not available"
+    for hardware in computer.Hardware:
+        if str(hardware.HardwareType) == 'Cpu':
+            return hardware.Name
+
+
+def get_gpu_name(computer):
+    gpu_names = []
+    for hardware in computer.Hardware:
+        hw_type = str(hardware.HardwareType)
+        if hw_type in ('GpuNvidia', 'GpuAmd'):
+            gpu_names.append(hardware.Name)
+    return gpu_names
+
 
 
 def get_cpu_cache():
@@ -95,48 +153,6 @@ def get_cpu_cache():
         size_kb = int(cache.MaxCacheSize)
         result.append(size_kb)
     return result
-
-
-def get_sensor_data(computer):
-    sensor_info = {}
-
-    for hw in computer.Hardware:
-        hw.Update()
-        name = hw.Name
-        sensor_info[name] = {}
-
-        for sensor in hw.Sensors:
-            stype = str(sensor.SensorType)
-            sname = sensor.Name
-            svalue = sensor.Value
-
-            if sensor.SensorType in (
-                Hardware.SensorType.Temperature,
-                Hardware.SensorType.Voltage,
-                Hardware.SensorType.Power,
-                Hardware.SensorType.Clock,
-                Hardware.SensorType.Fan
-            ):
-                sensor_info[name][f"{stype}: {sname}"] = svalue
-
-        for sub in hw.SubHardware:
-            sub.Update()
-            for sensor in sub.Sensors:
-                stype = str(sensor.SensorType)
-                sname = sensor.Name
-                svalue = sensor.Value
-
-                if sensor.SensorType in (
-                    Hardware.SensorType.Temperature,
-                    Hardware.SensorType.Voltage,
-                    Hardware.SensorType.Power,
-                    Hardware.SensorType.Clock,
-                    Hardware.SensorType.Fan
-                ):
-                    sensor_info[name][f"{stype}: {sname}"] = svalue
-
-    # computer.Close()
-    return sensor_info
 
 
 def get_ram_name():
@@ -168,6 +184,7 @@ class MainScreen(Screen):
         self.label_ram_status = Label()
         self.label_swp_status = Label()
 
+        self.label_gpu0_used  = Label()
         self.label_gpu0_temp  = Label()
         self.label_gpu0_power = Label()
         self.label_gpu0_clock = Label()
@@ -176,7 +193,8 @@ class MainScreen(Screen):
         self.label_gpu0_fan_2 = Label()
         self.label_gpu0_fan_3 = Label()
 
-        self.label_gpu1_temp = Label()
+        self.label_gpu1_used  = Label()
+        self.label_gpu1_temp  = Label()
         self.label_gpu1_power = Label()
         self.label_gpu1_clock = Label()
         self.label_gpu1_vram  = Label()
@@ -205,6 +223,7 @@ class MainScreen(Screen):
         )
 
         self.gpu0_view = Vertical(
+            self.label_gpu0_used,
             self.label_gpu0_temp,
             self.label_gpu0_power,
             self.label_gpu0_clock,
@@ -215,6 +234,7 @@ class MainScreen(Screen):
         )
 
         self.gpu1_view = Vertical(
+            self.label_gpu1_used,
             self.label_gpu1_temp,
             self.label_gpu1_power,
             self.label_gpu1_clock,
@@ -244,11 +264,10 @@ class MainScreen(Screen):
         try: gpu1_data = sensor_data[GPU_NAME1]
         except KeyError: gpu1_data = None
 
-        # Get colors for CPU data
         cpu_usage = psutil.cpu_percent()
         cpu_usage_color = get_color(cpu_usage)
-        # cpu_freq = cpu_data["Clock: CPU Core #1"]
-        cpu_freq = round(mean([cpu_data[f'Clock: CPU Core #{i+1}'] for i in range(os.cpu_count())]))
+        try: cpu_freq = round(mean([cpu_data[f'Clock: CPU Core #{i+1}'] for i in range(os.cpu_count())]))
+        except KeyError: cpu_freq = round(cpu_data['Clock: CPU Core #1'])
         cpu_freq_color = get_cpu_freq_color(cpu_freq)
         cpu_power = cpu_data['Power: CPU Package']
         cpu_power_color = get_color(cpu_power)
@@ -259,6 +278,8 @@ class MainScreen(Screen):
 
         # Get colors for GPU-0 data (pass if not available)
         if gpu0_data is not None:
+            gpu0_used = round(gpu_data[0].load*100, 1)
+            gpu0_used_color = get_color(gpu0_used)
             gpu0_temp = gpu0_data['Temperature: GPU Core']
             gpu0_temp_color = get_color(gpu0_temp)
             gpu0_power = gpu0_data['Power: GPU Package']
@@ -298,6 +319,8 @@ class MainScreen(Screen):
 
         # Support for second GPU (GPU-1)
         if gpu1_data is not None:
+            gpu1_used = round(gpu_data[1].load*100, 1)
+            gpu1_used_color = get_color(gpu1_used)
             gpu1_temp = gpu1_data['Temperature: GPU Core']
             gpu1_temp_color = get_color(gpu1_temp)
             gpu1_power = gpu1_data['Power: GPU Package']
@@ -348,6 +371,7 @@ class MainScreen(Screen):
 
         # Try to get GPU data. This data may not be available e.g. for internal graphics or on VM
         if gpu0_data is not None:
+            self.label_gpu0_used.update(F"GPU Core Load:   [{gpu0_used_color}]{gpu0_used}[/{gpu0_used_color}] %")
             self.label_gpu0_temp.update(F"GPU Temperature: [{gpu0_temp_color}]{gpu0_temp}[/{gpu0_temp_color}] *C")
             self.label_gpu0_clock.update(F"GPU Core Clock:  [{gpu0_clock_color}]{gpu0_clock}[/{gpu0_clock_color}] MHz")
             self.label_gpu0_power.update(F"GPU Power:       [{gpu0_power_color}]{round(gpu0_power, 1)}[/{gpu0_power_color}] W")
@@ -358,6 +382,7 @@ class MainScreen(Screen):
         else: self.label_gpu0_temp.update("[red]Not Available[/red]")
 
         if gpu1_data is not None:
+            self.label_gpu1_used.update(F"GPU Core Load:   [{gpu1_used_color}]{gpu1_used}[/{gpu1_used_color}] %")
             self.label_gpu1_temp.update(F"GPU Temperature: [{gpu1_temp_color}]{gpu1_temp}[/{gpu1_temp_color}] *C")
             self.label_gpu1_clock.update(F"GPU Core Clock:  [{gpu1_clock_color}]{gpu1_clock}[/{gpu1_clock_color}] MHz")
             self.label_gpu1_power.update(F"GPU Power:       [{gpu1_power_color}]{round(gpu1_power, 1)}[/{gpu1_power_color}] W")
@@ -369,7 +394,7 @@ class MainScreen(Screen):
 
     def compose(self) -> ComposeResult:
         yield Header()
-        if GPU_NAME1 != "Not Available":
+        if GPU_NAME1 != "[red]Not Detected[/red]":
             yield Container(
                 Horizontal(TitledSection("[cyan]System Overview[/cyan]", self.system_view), TitledSection(f"[green]{CPU_NAME}[/green]", self.cpu_view)),
                 Horizontal(TitledSection(f"[blue]{GPU_NAME0}[/blue]", self.gpu0_view), TitledSection(f"[blue]{GPU_NAME1}[/blue]", self.gpu1_view))
@@ -408,18 +433,19 @@ class CPUDetails(Screen):
         global CPU_NAME
         # Fetch CPU Data
         cpu_data = get_sensor_data(computer)[CPU_NAME]
-        cpu_count = os.cpu_count()
+
+        cpu_count = psutil.cpu_count(logical=False)
         cores_num = list(range(cpu_count))
 
         temp_rows = []
         clock_rows = []
         loads_rows = []
         volts_rows = []
-
         temp_data  = [cpu_data[f'Temperature: CPU Core #{i+1}'] for i in range(cpu_count)]
         clock_data = [round(cpu_data[f'Clock: CPU Core #{i+1}'], 1) for i in range(cpu_count)]
         loads_data = psutil.cpu_percent(0.5, percpu=True)
         volts_data = [round(cpu_data[f'Voltage: CPU Core #{i+1}'], 3) for i in range(cpu_count)]
+
 
         # Update rows
         for core in cores_num:
@@ -431,6 +457,7 @@ class CPUDetails(Screen):
             load_color = get_color(load)
             volt = volts_data[core]
             volt_color = get_voltage_color(volt)
+
 
             temp_rows.append((F"CPU-{core}", F"[{temp_color}]{temp}[/{temp_color}] *C"))
             clock_rows.append((F"CPU-{core}", F"[{clock_color}]{clock}[/{clock_color}] MHz"))
@@ -509,8 +536,10 @@ class Launcher(App):
 if __name__ == '__main__':
     # rprint(get_sensor_data(computer))
     # quit()
+    # print(get_gpu_name())
+    # quit()
     CPU_NAME = get_cpu_name()
-    CPU_NAME = CPU_NAME[:CPU_NAME.find(" CPU")].replace("(R)", "").replace("(TM)", "")
+    # CPU_NAME = CPU_NAME[:CPU_NAME.find(" CPU")].replace("(R)", "").replace("(TM)", "")
     CPU_FREQ = psutil.cpu_freq()
     CPU_CACHE = get_cpu_cache()
 
@@ -523,7 +552,7 @@ if __name__ == '__main__':
 
     # GPU0 Name
     try:
-        GPU_NAME0 = str(gpu_data[0].name)
+        GPU_NAME0 = str(GPUtil.getGPUs()[0].name)
         GPU0_VRAM = gpu_data[0].memoryTotal
     except:
         GPU_NAME0 = "Internal Graphics"
@@ -531,7 +560,7 @@ if __name__ == '__main__':
 
     # Support For Second GPU!
     try:
-        GPU_NAME1 = str(gpu_data[1].name)
+        GPU_NAME1 = str(GPUtil.getGPUs()[1].name)
         GPU1_VRAM = gpu_data[1].memoryTotal
     except:
         GPU_NAME1 = "[red]Not Detected[/red]"
