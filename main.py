@@ -203,6 +203,8 @@ class MainScreen(Screen):
             self.label_gpu_fan_3
         )
 
+
+    def on_screen_resume(self) -> None:
         self.tick = self.set_interval(0.5, self.chk_val)
 
     def on_screen_suspend(self) -> None:
@@ -309,7 +311,7 @@ class CPUDetails(Screen):
         self.clock_container = Vertical(self.clock_table)
         self.loads_container = Vertical(self.loads_table)
         self.volts_container = Vertical(self.volts_table)
-        self.timer = self.set_interval(0.5, self.chk_vals)
+
 
     def chk_vals(self):
         global CPU_NAME
@@ -364,7 +366,11 @@ class CPUDetails(Screen):
         self.volts_table.add_columns("CPU Core", "Core Voltage")
         for row in volts_rows: self.volts_table.add_row(*row)
 
-    def on_screen_suspend(self): self.timer.stop()
+    def on_screen_resume(self) -> None:
+        self.timer = self.set_interval(0.5, self.chk_vals)
+
+    def on_screen_suspend(self):
+        self.timer.stop()
 
     def compose(self) -> ComposeResult:
         yield Header()
