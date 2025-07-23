@@ -7,7 +7,7 @@ from typing import Iterable
 # External libraries
 import wmi
 import clr
-import System
+# import System
 import psutil
 import GPUtil
 import plotext as plt
@@ -168,17 +168,27 @@ class MainScreen(Screen):
         self.label_ram_status = Label()
         self.label_swp_status = Label()
 
-        self.label_gpu_temp  = Label()
-        self.label_gpu_power = Label()
-        self.label_gpu_clock = Label()
-        self.label_gpu_fan_1 = Label()
-        self.label_gpu_fan_2 = Label()
-        self.label_gpu_fan_3 = Label()
+        self.label_gpu0_temp  = Label()
+        self.label_gpu0_power = Label()
+        self.label_gpu0_clock = Label()
+        self.label_gpu0_vram  = Label()
+        self.label_gpu0_fan_1 = Label()
+        self.label_gpu0_fan_2 = Label()
+        self.label_gpu0_fan_3 = Label()
+
+        self.label_gpu1_temp = Label()
+        self.label_gpu1_power = Label()
+        self.label_gpu1_clock = Label()
+        self.label_gpu1_vram  = Label()
+        self.label_gpu1_fan_1 = Label()
+        self.label_gpu1_fan_2 = Label()
+        self.label_gpu1_fan_3 = Label()
 
         self.system_view = Vertical(
             Label(f"CPU Name: [green]{CPU_NAME}[/green]"),
-            Label(f"GPU Name: [blue]{GPU_NAME}[/blue]"),
-            Label(f"RAM Name: [yellow]{RAM_NAME}[/yellow] (JEDEC ID)")
+            Label(f"RAM Name: [yellow]{RAM_NAME}[/yellow] (JEDEC ID)"),
+            Label(f"GPU #0 Name: [blue]{GPU_NAME0}[/blue]"),
+            Label(f"GPU #1 Name: [blue]{GPU_NAME1}[/blue]"),
         )
 
         self.cpu_view = Vertical(
@@ -194,13 +204,24 @@ class MainScreen(Screen):
             self.label_swp_status
         )
 
-        self.gpu_view = Vertical(
-            self.label_gpu_temp,
-            self.label_gpu_power,
-            self.label_gpu_clock,
-            self.label_gpu_fan_1,
-            self.label_gpu_fan_2,
-            self.label_gpu_fan_3
+        self.gpu0_view = Vertical(
+            self.label_gpu0_temp,
+            self.label_gpu0_power,
+            self.label_gpu0_clock,
+            self.label_gpu0_vram,
+            self.label_gpu0_fan_1,
+            self.label_gpu0_fan_2,
+            self.label_gpu0_fan_3
+        )
+
+        self.gpu1_view = Vertical(
+            self.label_gpu1_temp,
+            self.label_gpu1_power,
+            self.label_gpu1_clock,
+            self.label_gpu1_vram,
+            self.label_gpu1_fan_1,
+            self.label_gpu1_fan_2,
+            self.label_gpu1_fan_3
         )
 
 
@@ -211,13 +232,17 @@ class MainScreen(Screen):
         self.tick.stop()
 
     def chk_val(self):
+        gpu_data = GPUtil.getGPUs()
         ram_used = round(psutil.virtual_memory().used/(1024**3), 1)
         swap_used = round(psutil.swap_memory().used/(1024**3), 1)
         sensor_data = get_sensor_data(computer)
         cpu_data = sensor_data[CPU_NAME]
 
-        try: gpu_data = sensor_data[GPU_NAME]
-        except: gpu_data = None
+        try: gpu0_data = sensor_data[GPU_NAME0]
+        except KeyError: gpu0_data = None
+
+        try: gpu1_data = sensor_data[GPU_NAME1]
+        except KeyError: gpu1_data = None
 
         # Get colors for CPU data
         cpu_usage = psutil.cpu_percent()
@@ -232,40 +257,87 @@ class MainScreen(Screen):
         cpu_volt = cpu_data['Voltage: CPU Core']
         cpu_volt_color = get_voltage_color(cpu_volt)
 
-        # Get colors for GPU data (pass if not available)
-        if gpu_data is not None:
-            gpu_temp = gpu_data['Temperature: GPU Core']
-            gpu_temp_color = get_color(gpu_temp)
-            gpu_power = gpu_data['Power: GPU Package']
-            gpu_power_color = get_color(gpu_power)
-            gpu_clock = gpu_data['Clock: GPU Core']
-            gpu_clock_color = get_gpu_clock_color(gpu_clock)
+        # Get colors for GPU-0 data (pass if not available)
+        if gpu0_data is not None:
+            gpu0_temp = gpu0_data['Temperature: GPU Core']
+            gpu0_temp_color = get_color(gpu0_temp)
+            gpu0_power = gpu0_data['Power: GPU Package']
+            gpu0_power_color = get_color(gpu0_power)
+            gpu0_clock = gpu0_data['Clock: GPU Core']
+            gpu0_clock_color = get_gpu_clock_color(gpu0_clock)
+            gpu0_vram_used = gpu_data[0].memoryUsed
+            gpu0_vram_total = gpu_data[0].memoryTotal
+            gpu0_vram_percent = round((gpu0_vram_used/gpu0_vram_total)*100, 1)
+            gpu0_vram_color = get_color(gpu0_vram_percent)
 
             # try fetch GPU Fans data (Not detected fallback if unavailable)
             try:
-                gpu_fan_1 = gpu_data['Fan: GPU Fan 1']
-                gpu_fan_1_color = get_gpu_fan_color(gpu_fan_1)
+                gpu0_fan_1 = gpu0_data['Fan: GPU Fan 1']
+                gpu0_fan_1_color = get_gpu_fan_color(gpu0_fan_1)
             except KeyError:
-                gpu_fan_1 = f"Not Detected"
-                gpu_fan_1_color = "red"
+                try:
+                    gpu0_fan_1 = gpu0_data['Fan: GPU Fan']
+                    gpu0_fan_1_color = get_gpu_fan_color(gpu0_fan_1)
+                except KeyError:
+                    gpu0_fan_1 = f"Not Detected"
+                    gpu0_fan_1_color = "red"
 
             try:
-                gpu_fan_2 = gpu_data['Fan: GPU Fan 2']
-                gpu_fan_2_color = get_gpu_fan_color(gpu_fan_2)
+                gpu0_fan_2 = gpu0_data['Fan: GPU Fan 2']
+                gpu0_fan_2_color = get_gpu_fan_color(gpu0_fan_2)
             except KeyError:
-                gpu_fan_2 = f"Not Detected"
-                gpu_fan_2_color = "red"
+                gpu0_fan_2 = f"Not Detected"
+                gpu0_fan_2_color = "red"
 
             try:
-                gpu_fan_3 = gpu_data['Fan: GPU Fan 3']
-                gpu_fan_3_color = get_gpu_fan_color(gpu_fan_3)
+                gpu0_fan_3 = gpu0_data['Fan: GPU Fan 3']
+                gpu0_fan_3_color = get_gpu_fan_color(gpu0_fan_3)
             except KeyError:
-                gpu_fan_3 = f"Not Detected"
-                gpu_fan_3_color = "red"
+                gpu0_fan_3 = f"Not Detected"
+                gpu0_fan_3_color = "red"
 
+        # Support for second GPU (GPU-1)
+        if gpu1_data is not None:
+            gpu1_temp = gpu1_data['Temperature: GPU Core']
+            gpu1_temp_color = get_color(gpu1_temp)
+            gpu1_power = gpu1_data['Power: GPU Package']
+            gpu1_power_color = get_color(gpu1_power)
+            gpu1_clock = gpu1_data['Clock: GPU Core']
+            gpu1_clock_color = get_gpu_clock_color(gpu1_clock)
+            gpu1_vram_used = gpu_data[1].memoryUsed
+            gpu1_vram_total = gpu_data[1].memoryTotal
+            gpu1_vram_percent = round((gpu1_vram_used/gpu1_vram_total)*100, 1)
+            gpu1_vram_color = get_color(gpu1_vram_percent)
+
+            # Try fetch GPU fans data (Not detected message fallback)
+            try:
+                gpu1_fan_1 = gpu1_data['Fan: GPU Fan 1']
+                gpu1_fan_1_color = get_gpu_fan_color(gpu1_fan_1)
+            except KeyError:
+                try:
+                    gpu1_fan_1 = gpu1_data['Fan: GPU']
+                    gpu1_fan_1_color = get_gpu_fan_color(gpu1_fan_1)
+                except KeyError:
+                    gpu1_fan_1 = f"Not Detected"
+                    gpu1_fan_1_color = "red"
+
+            try:
+                gpu1_fan_2 = gpu1_data['Fan: GPU Fan 2']
+                gpu1_fan_2_color = get_gpu_fan_color(gpu1_fan_2)
+            except KeyError:
+                gpu1_fan_2 = f"Not Detected"
+                gpu1_fan_2_color = "red"
+
+            try:
+                gpu1_fan_3 = gpu1_data['Fan: GPU Fan 3']
+                gpu1_fan_3_color = get_gpu_fan_color(gpu1_fan_3)
+            except KeyError:
+                gpu1_fan_3 = f"Not Detected"
+                gpu1_fan_3_color = "red"
 
         # update Labels
         self.label_cpu_usage.update(F"CPU Usage:       [{cpu_usage_color}]{cpu_usage}[/{cpu_usage_color}] %")
+
         self.label_cpu_freqc.update(F"CPU Frequency    [{cpu_freq_color}]{round(cpu_freq, 1)}[/{cpu_freq_color}] MHz")
         self.label_cpu_power.update(F"CPU Power:       [{cpu_power_color}]{round(cpu_power, 1)}[/{cpu_power_color}] W")
         self.label_cpu_tempC.update(F"CPU Temperature: [{cpu_temp_color}]{cpu_temp}[/{cpu_temp_color}] *C")
@@ -275,23 +347,42 @@ class MainScreen(Screen):
         self.label_swp_status.update(F"SWAP Memory Used:  {swap_used} /  {SWP_DTCT} GB ({round((swap_used/SWP_DTCT)*100, 1)} %)")
 
         # Try to get GPU data. This data may not be available e.g. for internal graphics or on VM
-        if gpu_data is not None:
-            self.label_gpu_temp.update (F"GPU Temperature: [{gpu_temp_color}]{gpu_temp}[/{gpu_temp_color}] *C")
-            self.label_gpu_clock.update(F"GPU Core Clock:  [{gpu_clock_color}]{gpu_clock}[/{gpu_clock_color}] MHz")
-            self.label_gpu_power.update(F"GPU Power:       [{gpu_power_color}]{round(gpu_power, 1)}[/{gpu_power_color}] W")
-            self.label_gpu_fan_1.update(F"GPU Fan 1 Speed: [{gpu_fan_1_color}]{gpu_fan_1}[/{gpu_fan_1_color}] RPM")
-            self.label_gpu_fan_2.update(F"GPU Fan 2 Speed: [{gpu_fan_2_color}]{gpu_fan_2}[/{gpu_fan_2_color}] RPM")
-            self.label_gpu_fan_3.update(F"GPU Fan 3 Speed: [{gpu_fan_3_color}]{gpu_fan_3}[/{gpu_fan_3_color}] RPM")
+        if gpu0_data is not None:
+            self.label_gpu0_temp.update(F"GPU Temperature: [{gpu0_temp_color}]{gpu0_temp}[/{gpu0_temp_color}] *C")
+            self.label_gpu0_clock.update(F"GPU Core Clock:  [{gpu0_clock_color}]{gpu0_clock}[/{gpu0_clock_color}] MHz")
+            self.label_gpu0_power.update(F"GPU Power:       [{gpu0_power_color}]{round(gpu0_power, 1)}[/{gpu0_power_color}] W")
+            self.label_gpu0_vram.update(F"GPU VRAM Usage:  [{gpu0_vram_color}]{gpu0_vram_used} / {gpu0_vram_total} MB ({gpu0_vram_percent} %)[/{gpu0_vram_color}]")
+            self.label_gpu0_fan_1.update(F"GPU Fan 1 Speed: [{gpu0_fan_1_color}]{gpu0_fan_1}[/{gpu0_fan_1_color}] RPM")
+            self.label_gpu0_fan_2.update(F"GPU Fan 2 Speed: [{gpu0_fan_2_color}]{gpu0_fan_2}[/{gpu0_fan_2_color}] RPM")
+            self.label_gpu0_fan_3.update(F"GPU Fan 3 Speed: [{gpu0_fan_3_color}]{gpu0_fan_3}[/{gpu0_fan_3_color}] RPM")
+        else: self.label_gpu0_temp.update("[red]Not Available[/red]")
+
+        if gpu1_data is not None:
+            self.label_gpu1_temp.update(F"GPU Temperature: [{gpu1_temp_color}]{gpu1_temp}[/{gpu1_temp_color}] *C")
+            self.label_gpu1_clock.update(F"GPU Core Clock:  [{gpu1_clock_color}]{gpu1_clock}[/{gpu1_clock_color}] MHz")
+            self.label_gpu1_power.update(F"GPU Power:       [{gpu1_power_color}]{round(gpu1_power, 1)}[/{gpu1_power_color}] W")
+            self.label_gpu1_vram.update(F"GPU VRAM Usage:  [{gpu1_vram_color}]{gpu1_vram_used} / {gpu1_vram_total} MB ({gpu1_vram_percent} %)[/{gpu1_vram_color}]")
+            self.label_gpu1_fan_1.update(F"GPU Fan 1 Speed: [{gpu1_fan_1_color}]{gpu1_fan_1}[/{gpu1_fan_1_color}] RPM")
+            self.label_gpu1_fan_2.update(F"GPU Fan 2 Speed: [{gpu1_fan_2_color}]{gpu1_fan_2}[/{gpu1_fan_2_color}] RPM")
+            self.label_gpu1_fan_3.update(F"GPU Fan 3 Speed: [{gpu1_fan_3_color}]{gpu1_fan_3}[/{gpu1_fan_3_color}] RPM")
+        else: self.label_gpu1_temp.update("[red]Not Detected[/red]")
 
     def compose(self) -> ComposeResult:
         yield Header()
-        yield Container(
-            Horizontal(TitledSection("[cyan]System Overview[/cyan]", self.system_view), TitledSection(f"[green]{CPU_NAME}[/green]", self.cpu_view)),
-            Horizontal(TitledSection("[yellow]Memory Information[/yellow]", self.ram_view), TitledSection(f"[blue]{GPU_NAME}[/blue]", self.gpu_view))
-        )
+        if GPU_NAME1 != "Not Available":
+            yield Container(
+                Horizontal(TitledSection("[cyan]System Overview[/cyan]", self.system_view), TitledSection(f"[green]{CPU_NAME}[/green]", self.cpu_view)),
+                Horizontal(TitledSection(f"[blue]{GPU_NAME0}[/blue]", self.gpu0_view), TitledSection(f"[blue]{GPU_NAME1}[/blue]", self.gpu1_view))
+            )
+        else:
+            yield Container(
+                Horizontal(TitledSection("[cyan]System Overview[/cyan]", self.system_view), TitledSection(f"[green]{CPU_NAME}[/green]", self.cpu_view)),
+                Horizontal(TitledSection(f"[blue]{GPU_NAME0}[/blue]", self.gpu0_view), TitledSection(f"[yellow]Memory Information[/yellow]", self.ram_view))
+            )
         yield Footer()
 
-
+# CPU Details Window
+# Display Per-Core information about voltage, load, temps and clock frequencies
 class CPUDetails(Screen):
     CSS = """
     Screen {
@@ -430,14 +521,27 @@ if __name__ == '__main__':
 
     gpu_data = GPUtil.getGPUs()
 
-    # GPU Name
-    try: GPU_NAME = str(gpu_data[0].name)
-    except: GPU_NAME = "Internal Graphics"
+    # GPU0 Name
+    try:
+        GPU_NAME0 = str(gpu_data[0].name)
+        GPU0_VRAM = gpu_data[0].memoryTotal
+    except:
+        GPU_NAME0 = "Internal Graphics"
+        GPU0_VRAM = 0
 
-    # GPU VRAM total
-    try: GPU_VRAM_TOTAL = gpu_data[0].memoryTotal
-    except IndexError: GPU_VRAM_TOTAL = "[red]Not Available[/red]"
+    # Support For Second GPU!
+    try:
+        GPU_NAME1 = str(gpu_data[1].name)
+        GPU1_VRAM = gpu_data[1].memoryTotal
+    except:
+        GPU_NAME1 = "[red]Not Detected[/red]"
+        GPU1_VRAM = 0
+
+    # # GPU VRAM total
+    # try: GPU_VRAM_TOTAL = gpu_data[0].memoryTotal
+    # except IndexError: GPU_VRAM_TOTAL = "[red]Not Available[/red]"
 
     Launcher().run()
 
-    computer.Open()
+    # On CTRL+Q
+    computer.Close()
