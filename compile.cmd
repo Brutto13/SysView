@@ -1,1 +1,1 @@
-pyinstaller main.py --onefile --uac-admin --add-data "P:\Python\SysView\dll-container;dll-container" --name "SysView" --icon="icon.ico"
+pyinstaller main.py --splash splash.png --uac-admin --add-data "P:\Python\SysView\dll-container;dll-container" --name "SysView" --icon="icon.ico"

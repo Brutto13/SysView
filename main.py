@@ -1,16 +1,15 @@
 # Built-in libraries
+import datetime
 import os
 import sys
-import asyncio
 from typing import Iterable
 
 # External libraries
 import wmi
 import clr
-# import System
+import win32com.client
 import psutil
 import GPUtil
-import plotext as plt
 import subprocess
 
 from statistics import mean
@@ -22,12 +21,21 @@ from textual.containers import Container, Horizontal, Vertical, VerticalScroll
 from textual.widget import Widget
 from textual.binding import Binding
 
+# Constants
+TITLE = "SysView 1.0.1"
+
+# Handle PyInstaller Splash Image
+try:
+    import pyi_splash
+except ImportError: pass
+
 # Fetch DLL
 try:
     clr.AddReference(sys._MEIPASS + r'\dll-container\LibreHardwareMonitorLib.dll')
 except AttributeError:
     clr.AddReference(os.getcwd() + r'\dll-container\LibreHardwareMonitorLib.dll')
 
+# Configure DLL
 from LibreHardwareMonitor import Hardware
 
 computer = Hardware.Computer()
@@ -81,13 +89,7 @@ def get_sensor_data(computer):
     # computer.Close()
     return sensor_info
 
-# Constants
-TITLE = "SysView 1.0.0"
-
-# Global Variables
-cpu_temps: list[float] = [0]
-
-
+# Getting colors for data
 def get_color(value: float | int) -> str:
     if value >= 95: return "red"
     elif value >= 50: return "yellow"
@@ -120,14 +122,36 @@ def get_gpu_clock_color(value: float | int) -> str:
     else: return "green"
 
 
-# def get_cpu_name():
-#     try:
-#         output = subprocess.check_output(
-#             "wmic cpu get Name", shell=True
-#         ).decode(errors="ignore").split("\n")[1].strip()
-#         return output or "Unknown"
-#     except Exception:
-#         return "Not available"
+def get_disk_info():
+    c = wmi.WMI()
+    fso = win32com.client.Dispatch("Scripting.FileSystemObject")
+
+    disk_info = []
+
+    for physical_disk in c.Win32_DiskDrive():
+        # Find partitions
+        for partition in physical_disk.associators("Win32_DiskDriveToDiskPartition"):
+            for logical_disk in partition.associators("Win32_LogicalDiskToPartition"):
+                letter = logical_disk.DeviceID  # np. "C:"
+                usage = psutil.disk_usage(letter + "\\")
+
+                try:
+                    volume = fso.GetDrive(letter)
+                    label = volume.VolumeName
+                except:
+                    label = ""
+
+                disk_info.append({
+                    "Name": physical_disk.Model,
+                    "Letter": letter,
+                    "SATA": physical_disk.SCSIPort,
+                    "Free": round(usage.free / (1024 ** 3), 2),
+                    "Used": round(usage.used / (1024 ** 3), 2),
+                    "Total": round(usage.total / (1024 ** 3), 2),
+                })
+
+    return disk_info
+
 
 def get_cpu_name():
     for hardware in computer.Hardware:
@@ -175,6 +199,8 @@ class TitledSection(Vertical):
 class MainScreen(Screen):
     def __init__(self):
         super().__init__()
+        self.bus_clock = Label()
+
         self.label_cpu_usage   = Label()
         self.label_cpu_freqc   = Label()
         self.label_cpu_tempC   = Label()
@@ -203,10 +229,12 @@ class MainScreen(Screen):
         self.label_gpu1_fan_3 = Label()
 
         self.system_view = Vertical(
-            Label(f"CPU Name: [green]{CPU_NAME}[/green]"),
-            Label(f"RAM Name: [yellow]{RAM_NAME}[/yellow] (JEDEC ID)"),
-            Label(f"GPU #0 Name: [blue]{GPU_NAME0}[/blue]"),
-            Label(f"GPU #1 Name: [blue]{GPU_NAME1}[/blue]"),
+            Label(f"CPU Name:    [green]{CPU_NAME}[/green]"),
+            Label(f"RAM Name:    [yellow]{RAM_NAME}[/yellow] (JEDEC ID)"),
+            Label(f"BOOT TIME:   [cyan]{BOOT_TIME}[/cyan]"),
+            self.bus_clock,
+            Label(f"GPU #0 Name: [purple]{GPU_NAME0}[/purple]"),
+            Label(f"GPU #1 Name: [blue]{GPU_NAME1}[/blue]")
         )
 
         self.cpu_view = Vertical(
@@ -359,8 +387,9 @@ class MainScreen(Screen):
                 gpu1_fan_3_color = "red"
 
         # update Labels
-        self.label_cpu_usage.update(F"CPU Usage:       [{cpu_usage_color}]{cpu_usage}[/{cpu_usage_color}] %")
+        self.bus_clock.update(F"Bus Clock:   [cyan]{round(cpu_data['Clock: Bus Speed'], 2)}[/cyan] MHz")
 
+        self.label_cpu_usage.update(F"CPU Usage:       [{cpu_usage_color}]{cpu_usage}[/{cpu_usage_color}] %")
         self.label_cpu_freqc.update(F"CPU Frequency    [{cpu_freq_color}]{round(cpu_freq, 1)}[/{cpu_freq_color}] MHz")
         self.label_cpu_power.update(F"CPU Power:       [{cpu_power_color}]{round(cpu_power, 1)}[/{cpu_power_color}] W")
         self.label_cpu_tempC.update(F"CPU Temperature: [{cpu_temp_color}]{cpu_temp}[/{cpu_temp_color}] *C")
@@ -379,7 +408,7 @@ class MainScreen(Screen):
             self.label_gpu0_fan_1.update(F"GPU Fan 1 Speed: [{gpu0_fan_1_color}]{gpu0_fan_1}[/{gpu0_fan_1_color}] RPM")
             self.label_gpu0_fan_2.update(F"GPU Fan 2 Speed: [{gpu0_fan_2_color}]{gpu0_fan_2}[/{gpu0_fan_2_color}] RPM")
             self.label_gpu0_fan_3.update(F"GPU Fan 3 Speed: [{gpu0_fan_3_color}]{gpu0_fan_3}[/{gpu0_fan_3_color}] RPM")
-        else: self.label_gpu0_temp.update("[red]Not Available[/red]")
+        else: self.label_gpu0_temp.update("[red]Internal GPU is not supported[/red]")
 
         if gpu1_data is not None:
             self.label_gpu1_used.update(F"GPU Core Load:   [{gpu1_used_color}]{gpu1_used}[/{gpu1_used_color}] %")
@@ -397,7 +426,7 @@ class MainScreen(Screen):
         if GPU_NAME1 != "[red]Not Detected[/red]":
             yield Container(
                 Horizontal(TitledSection("[cyan]System Overview[/cyan]", self.system_view), TitledSection(f"[green]{CPU_NAME}[/green]", self.cpu_view)),
-                Horizontal(TitledSection(f"[blue]{GPU_NAME0}[/blue]", self.gpu0_view), TitledSection(f"[blue]{GPU_NAME1}[/blue]", self.gpu1_view))
+                Horizontal(TitledSection(f"[purple]{GPU_NAME0}[/purple]", self.gpu0_view), TitledSection(f"[blue]{GPU_NAME1}[/blue]", self.gpu1_view))
             )
         else:
             yield Container(
@@ -405,6 +434,7 @@ class MainScreen(Screen):
                 Horizontal(TitledSection(f"[blue]{GPU_NAME0}[/blue]", self.gpu0_view), TitledSection(f"[yellow]Memory Information[/yellow]", self.ram_view))
             )
         yield Footer()
+
 
 # CPU Details Window
 # Display Per-Core information about voltage, load, temps and clock frequencies
@@ -497,6 +527,11 @@ class CPUDetails(Screen):
             Horizontal(TitledSection("[green]CPU Core Loads[/green]", self.loads_container), TitledSection("[green]CPU Voltages[/green]", self.volts_container))
         )
 
+#
+# class DiskDetails(Screen):
+#     def __init__(self):
+#         self.
+
 class Launcher(App):
     CSS = """
     
@@ -534,12 +569,17 @@ class Launcher(App):
 
 
 if __name__ == '__main__':
+
     # rprint(get_sensor_data(computer))
     # quit()
-    # print(get_gpu_name())
-    # quit()
+
+    BOOT_TIME_TS = psutil.boot_time()
+    BT = datetime.datetime.fromtimestamp(BOOT_TIME_TS)
+    BOOT_TIME = F"{BT.day}/{BT.month}/{BT.year} {BT.hour}:{BT.minute}:{BT.second}"
+    try:
+        pyi_splash.update_text("Retrieving Hardware Information")
+    except NameError: pass
     CPU_NAME = get_cpu_name()
-    # CPU_NAME = CPU_NAME[:CPU_NAME.find(" CPU")].replace("(R)", "").replace("(TM)", "")
     CPU_FREQ = psutil.cpu_freq()
     CPU_CACHE = get_cpu_cache()
 
@@ -566,10 +606,8 @@ if __name__ == '__main__':
         GPU_NAME1 = "[red]Not Detected[/red]"
         GPU1_VRAM = 0
 
-    # # GPU VRAM total
-    # try: GPU_VRAM_TOTAL = gpu_data[0].memoryTotal
-    # except IndexError: GPU_VRAM_TOTAL = "[red]Not Available[/red]"
-
+    try: pyi_splash.close()
+    except NameError: pass
     Launcher().run()
 
     # On CTRL+Q
