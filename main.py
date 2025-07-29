@@ -2,6 +2,7 @@
 import datetime
 import os
 import sys
+import shutil
 from typing import Iterable
 
 # External libraries
@@ -207,8 +208,10 @@ class MainScreen(Screen):
         self.label_cpu_power   = Label()
         self.label_cpu_voltage = Label()
 
-        self.label_ram_status = Label()
-        self.label_swp_status = Label()
+        # self.label_ram_status = Label()
+        # self.label_swp_status = Label()
+
+        self.hdd_table = DataTable(cursor_type='none')
 
         self.label_gpu0_used  = Label()
         self.label_gpu0_temp  = Label()
@@ -245,9 +248,8 @@ class MainScreen(Screen):
             self.label_cpu_voltage
         )
 
-        self.ram_view = Vertical(
-            self.label_ram_status,
-            self.label_swp_status
+        self.hdd_view = Vertical(
+            self.hdd_table
         )
 
         self.gpu0_view = Vertical(
@@ -395,8 +397,8 @@ class MainScreen(Screen):
         self.label_cpu_tempC.update(F"CPU Temperature: [{cpu_temp_color}]{cpu_temp}[/{cpu_temp_color}] *C")
         self.label_cpu_voltage.update(F"CPU Voltage:     [{cpu_volt_color}]{round(cpu_volt, 1)}[/{cpu_volt_color}] V")
 
-        self.label_ram_status.update(F"RAM Memory Used:  {ram_used} / {RAM_DTCT} GB ({round((ram_used/RAM_DTCT)*100, 1)} %)")
-        self.label_swp_status.update(F"SWAP Memory Used:  {swap_used} /  {SWP_DTCT} GB ({round((swap_used/SWP_DTCT)*100, 1)} %)")
+        # self.label_ram_status.update(F"RAM Memory Used:  {ram_used} / {RAM_DTCT} GB ({round((ram_used/RAM_DTCT)*100, 1)} %)")
+        # self.label_swp_status.update(F"SWAP Memory Used:  {swap_used} /  {SWP_DTCT} GB ({round((swap_used/SWP_DTCT)*100, 1)} %)")
 
         # Try to get GPU data. This data may not be available e.g. for internal graphics or on VM
         if gpu0_data is not None:
@@ -410,6 +412,7 @@ class MainScreen(Screen):
             self.label_gpu0_fan_3.update(F"GPU Fan 3 Speed: [{gpu0_fan_3_color}]{gpu0_fan_3}[/{gpu0_fan_3_color}] RPM")
         else: self.label_gpu0_temp.update("[red]Internal GPU is not supported[/red]")
 
+        # Try to get second GPU data (this is not available if user has only one GPU)
         if gpu1_data is not None:
             self.label_gpu1_used.update(F"GPU Core Load:   [{gpu1_used_color}]{gpu1_used}[/{gpu1_used_color}] %")
             self.label_gpu1_temp.update(F"GPU Temperature: [{gpu1_temp_color}]{gpu1_temp}[/{gpu1_temp_color}] *C")
@@ -421,17 +424,33 @@ class MainScreen(Screen):
             self.label_gpu1_fan_3.update(F"GPU Fan 3 Speed: [{gpu1_fan_3_color}]{gpu1_fan_3}[/{gpu1_fan_3_color}] RPM")
         else: self.label_gpu1_temp.update("[red]Not Detected[/red]")
 
+        # Get HDD info
+        hdd_rows = []
+        self.hdd_table.clear(columns=True)
+        self.hdd_table.add_columns("Drive", "Used space", "Free Space", "Usage")
+        for drive in DRIVES:
+            total, used, free = shutil.disk_usage(drive)
+            hdd_rows.append(
+                (f"{drive}", f"{round(used/(1024**3), 1)} GB", f"{round(free/(1024**3), 1)} GB", f"{round(used/total, 1)} %")
+            )
+
+        for row in hdd_rows:
+            self.hdd_table.add_row(*row)
+
     def compose(self) -> ComposeResult:
         yield Header()
+        # Show SysOverview, CPU data and RAM on top, both GPU on bottom (if possible)
         if GPU_NAME1 != "[red]Not Detected[/red]":
             yield Container(
-                Horizontal(TitledSection("[cyan]System Overview[/cyan]", self.system_view), TitledSection(f"[green]{CPU_NAME}[/green]", self.cpu_view)),
+                Horizontal(TitledSection("[cyan]System Overview[/cyan]", self.system_view), TitledSection(f"[green]{CPU_NAME}[/green]", self.cpu_view), TitledSection("[yellow]Disk drives Information[/yellow]", self.hdd_view)),
                 Horizontal(TitledSection(f"[purple]{GPU_NAME0}[/purple]", self.gpu0_view), TitledSection(f"[blue]{GPU_NAME1}[/blue]", self.gpu1_view))
             )
+
+        # Show SysOverview, CPU data on top, RAM and only GPU on bottom
         else:
             yield Container(
                 Horizontal(TitledSection("[cyan]System Overview[/cyan]", self.system_view), TitledSection(f"[green]{CPU_NAME}[/green]", self.cpu_view)),
-                Horizontal(TitledSection(f"[blue]{GPU_NAME0}[/blue]", self.gpu0_view), TitledSection(f"[yellow]Memory Information[/yellow]", self.ram_view))
+                Horizontal(TitledSection(f"[blue]{GPU_NAME0}[/blue]", self.gpu0_view), TitledSection(f"[yellow]Disk drives Information[/yellow]", self.hdd_view))
             )
         yield Footer()
 
@@ -569,16 +588,15 @@ class Launcher(App):
 
 
 if __name__ == '__main__':
-
+    rprint("BOOT: Entering program...")
     # rprint(get_sensor_data(computer))
     # quit()
-
+    rprint("[cyan]INFO: Getting BOOT time...[/]")
     BOOT_TIME_TS = psutil.boot_time()
     BT = datetime.datetime.fromtimestamp(BOOT_TIME_TS)
     BOOT_TIME = F"{BT.day}/{BT.month}/{BT.year} {BT.hour}:{BT.minute}:{BT.second}"
-    try:
-        pyi_splash.update_text("Retrieving Hardware Information")
-    except NameError: pass
+
+    rprint("[cyan]INFO: Retrieving hardware information...[/]")
     CPU_NAME = get_cpu_name()
     CPU_FREQ = psutil.cpu_freq()
     CPU_CACHE = get_cpu_cache()
@@ -588,27 +606,43 @@ if __name__ == '__main__':
 
     SWP_DTCT = round(psutil.swap_memory().total/(1024**3), 1)
 
+    rprint("[cyan]INFO: Retrieving GPU data...[/]")
     gpu_data = GPUtil.getGPUs()
 
     # GPU0 Name
     try:
         GPU_NAME0 = str(GPUtil.getGPUs()[0].name)
         GPU0_VRAM = gpu_data[0].memoryTotal
+        rprint(f"[cyan]INFO: GPU0 found: {GPU_NAME0}[/]")
     except:
+        # Internal Graphics is not supported (yet)
         GPU_NAME0 = "Internal Graphics"
         GPU0_VRAM = 0
+        rprint("[yellow]WARN: GPU0 Data not available[/]")
+        rprint("This IS expected if you are using Integrated Graphics.")
+        rprint("This IS NOT expected if you are using external GPU")
 
     # Support For Second GPU!
     try:
         GPU_NAME1 = str(GPUtil.getGPUs()[1].name)
         GPU1_VRAM = gpu_data[1].memoryTotal
+        rprint(F"[cyan]INFO: GPU1 Found: {GPU_NAME1}")
     except:
         GPU_NAME1 = "[red]Not Detected[/red]"
         GPU1_VRAM = 0
 
+    # Get available Drives
+    rprint("[cyan]INFO: Retrieving disk data...[/]")
+    DRIVES = [p.device for p in psutil.disk_partitions()]
+    rprint(f"[cyan]INFO: Detected {len(DRIVES)} drives")
+
+    rprint("BOOT: Closing Splash...")
     try: pyi_splash.close()
     except NameError: pass
+    rprint("[cyan]INFO: Lauching app...[/]")
     Launcher().run()
-
+    rprint("[cyan]INFO: App closed![/]")
     # On CTRL+Q
+    rprint("[cyan]INFO: Releasing drivers...")
     computer.Close()
+    rprint("[green]DONE: Done![/]")
