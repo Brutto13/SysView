@@ -561,7 +561,7 @@ class SaveScreen(Screen):
         yield Header()
         yield Container(
             Input(placeholder="Enter save path", id='path'),
-            Select([("TXT File", "txt"), ("JSON data", "json"), ("HTML Report", "html")], prompt="Select file format", id='fs'),
+            Select([("TXT File", "txt"), ("JSON data", "json")], prompt="Select file format", id='fs'),
             Horizontal(Button("Save", variant='success', id='save'), Button("Cancel", variant='error', id='back')),
             id='dialog'
         )
