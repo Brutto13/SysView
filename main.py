@@ -31,6 +31,7 @@ try:
 except ImportError: pass
 
 # Fetch DLL
+rprint("[cyan]INFO: Loading drivers...[/]")
 try:
     clr.AddReference(sys._MEIPASS + r'\dll-container\LibreHardwareMonitorLib.dll')
 except AttributeError:
@@ -39,6 +40,7 @@ except AttributeError:
 # Configure DLL
 from LibreHardwareMonitor import Hardware
 
+rprint("[cyan]INFO: Configuring drivers...[/]")
 computer = Hardware.Computer()
 computer.IsCpuEnabled = True
 computer.IsGpuEnabled = True
@@ -426,6 +428,8 @@ class MainScreen(Screen):
 
         # Get HDD info
         hdd_rows = []
+        # re-check available disks.
+        DRIVES = [p.device for p in psutil.disk_partitions()]
         self.hdd_table.clear(columns=True)
         self.hdd_table.add_columns("Drive", "Used space", "Free Space", "Usage")
         for drive in DRIVES:
@@ -439,14 +443,14 @@ class MainScreen(Screen):
 
     def compose(self) -> ComposeResult:
         yield Header()
-        # Show SysOverview, CPU data and RAM on top, both GPU on bottom (if possible)
+        # Show SysOverview, CPU data and Disk Info on top, both GPU on bottom (if possible)
         if GPU_NAME1 != "[red]Not Detected[/red]":
             yield Container(
                 Horizontal(TitledSection("[cyan]System Overview[/cyan]", self.system_view), TitledSection(f"[green]{CPU_NAME}[/green]", self.cpu_view), TitledSection("[yellow]Disk drives Information[/yellow]", self.hdd_view)),
                 Horizontal(TitledSection(f"[purple]{GPU_NAME0}[/purple]", self.gpu0_view), TitledSection(f"[blue]{GPU_NAME1}[/blue]", self.gpu1_view))
             )
 
-        # Show SysOverview, CPU data on top, RAM and only GPU on bottom
+        # Show SysOverview, CPU data on top, Disk Info and only GPU on bottom
         else:
             yield Container(
                 Horizontal(TitledSection("[cyan]System Overview[/cyan]", self.system_view), TitledSection(f"[green]{CPU_NAME}[/green]", self.cpu_view)),
