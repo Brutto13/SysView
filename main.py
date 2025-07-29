@@ -1,5 +1,6 @@
 # Built-in libraries
 import datetime
+import json
 import os
 import sys
 import shutil
@@ -17,13 +18,13 @@ from statistics import mean
 from rich import print as rprint
 from rich.console import Console
 from textual.app import App, Screen, ComposeResult, SystemCommand
-from textual.widgets import Header, Label, Footer, DataTable, Static
+from textual.widgets import Header, Label, Footer, DataTable, Input, Select, Button
 from textual.containers import Container, Horizontal, Vertical, VerticalScroll
 from textual.widget import Widget
 from textual.binding import Binding
 
 # Constants
-TITLE = "SysView 1.0.1"
+TITLE = "SysView 1.1.0"
 
 # Handle PyInstaller Splash Image
 try:
@@ -370,7 +371,7 @@ class MainScreen(Screen):
                 gpu1_fan_1_color = get_gpu_fan_color(gpu1_fan_1)
             except KeyError:
                 try:
-                    gpu1_fan_1 = gpu1_data['Fan: GPU']
+                    gpu1_fan_1 = gpu1_data['Fan: GPU Fan']
                     gpu1_fan_1_color = get_gpu_fan_color(gpu1_fan_1)
                 except KeyError:
                     gpu1_fan_1 = f"Not Detected"
@@ -397,7 +398,7 @@ class MainScreen(Screen):
         self.label_cpu_freqc.update(F"CPU Frequency    [{cpu_freq_color}]{round(cpu_freq, 1)}[/{cpu_freq_color}] MHz")
         self.label_cpu_power.update(F"CPU Power:       [{cpu_power_color}]{round(cpu_power, 1)}[/{cpu_power_color}] W")
         self.label_cpu_tempC.update(F"CPU Temperature: [{cpu_temp_color}]{cpu_temp}[/{cpu_temp_color}] *C")
-        self.label_cpu_voltage.update(F"CPU Voltage:     [{cpu_volt_color}]{round(cpu_volt, 1)}[/{cpu_volt_color}] V")
+        self.label_cpu_voltage.update(F"CPU Voltage:     [{cpu_volt_color}]{round(cpu_volt, 3)}[/{cpu_volt_color}] V")
 
         # self.label_ram_status.update(F"RAM Memory Used:  {ram_used} / {RAM_DTCT} GB ({round((ram_used/RAM_DTCT)*100, 1)} %)")
         # self.label_swp_status.update(F"SWAP Memory Used:  {swap_used} /  {SWP_DTCT} GB ({round((swap_used/SWP_DTCT)*100, 1)} %)")
@@ -435,7 +436,7 @@ class MainScreen(Screen):
         for drive in DRIVES:
             total, used, free = shutil.disk_usage(drive)
             hdd_rows.append(
-                (f"{drive}", f"{round(used/(1024**3), 1)} GB", f"{round(free/(1024**3), 1)} GB", f"{round(used/total, 1)} %")
+                (f"{drive}", f"{round(used/(1024**3), 1)} GB", f"{round(free/(1024**3), 1)} GB", f"{round(used*100/total, 1)} %")
             )
 
         for row in hdd_rows:
@@ -555,8 +556,86 @@ class CPUDetails(Screen):
 #     def __init__(self):
 #         self.
 
+class SaveScreen(Screen):
+    def compose(self) -> ComposeResult:
+        yield Header()
+        yield Container(
+            Input(placeholder="Enter save path", id='path'),
+            Select([("TXT File", "txt"), ("JSON data", "json"), ("HTML Report", "html")], prompt="Select file format", id='fs'),
+            Horizontal(Button("Save", variant='success', id='save'), Button("Cancel", variant='error', id='back')),
+            id='dialog'
+        )
+        yield Footer()
+
+    def on_button_pressed(self, event):
+        selector = self.query_one("#fs", Select)
+        pathholder = self.query_one("#path", Input)
+
+        mode = selector.value
+        filepath = pathholder.value
+        data = get_sensor_data(computer)
+        if event.button.id == "save":
+            if mode == "txt":
+                content = f"""
+------------------------------+ SysView Sensor Data Readout +------------------------------
+============ CPU DATA ============
+CPU Name:........ {CPU_NAME}
+CPU Usage:....... {psutil.cpu_percent(0.1)} %
+CPU Frequency:... {round(mean([data[CPU_NAME][f'Clock: CPU Core #{i+1}'] for i in range(os.cpu_count())]))} MHz
+CPU Temperature:. {data[CPU_NAME]["Temperature: CPU Package"]} *C
+CPU Power Usage:. {round(data[CPU_NAME]["Power: CPU Package"], 1)} W
+CPU Core Voltage: {round(data[CPU_NAME]["Voltage: CPU Core"], 3)} V
+
+============ RAM DATA ============
+RAM Name:  {RAM_NAME}
+RAM Used:  {psutil.virtual_memory().used} GB
+RAM Total: {RAM_DTCT} GB
+"""
+
+
+            elif mode == "json":
+                content = json.dumps(get_sensor_data(computer))
+
+            try:
+                with open(filepath, "x") as file:
+                    file.write(content)
+                    self.app.push_screen(FileSavedInfo())
+            except FileExistsError:
+                self.app.push_screen(FileExists())
+
+        else: self.app.pop_screen()
+
+
+class FileExists(Screen):
+    def compose(self) -> ComposeResult:
+        yield Container(
+            Label("Error while saving file!"),
+            Label("[red]FileExistsError[/]: [yellow]File already exists![/]"),
+            Button("OK", variant='primary'),
+            id='popup'
+        )
+
+    def on_button_pressed(self):
+        self.app.pop_screen()
+
+
+class FileSavedInfo(Screen):
+    def compose(self):
+        yield Container(
+            Label("File Saved Successfully"),
+            Button("OK"),
+            id='popup'
+        )
+
+    def on_button_pressed(self, event):
+        self.app.pop_screen()
+
 class Launcher(App):
     CSS = """
+    
+    Screen {
+        align: center middle;
+    }
     
     .titled-section {
         border: solid white;
@@ -570,6 +649,36 @@ class Launcher(App):
     
     .section-title {
         text-style: bold;
+    }
+    
+    
+    Input {
+        margin: 2;
+    }
+    
+    Select {
+        margin: 2;
+    }
+    
+    Button {
+        margin: 1;
+        width: 1fr;
+    }
+    
+    #dialog {
+        align: center middle;
+        border: solid white;
+        width: 50%;
+        height: 60%;
+    }
+    
+    #popup {
+        align: center middle;
+        width: 50%;
+        height: auto;
+        border: round white;
+        padding: 2 4;
+        background: grey;
     }
     """
 
@@ -585,6 +694,7 @@ class Launcher(App):
         yield SystemCommand("Quit", "Quit the app", sys.exit)
         yield SystemCommand("Main Screen", "Go to main screen", lambda: self.push_screen(MainScreen()))
         yield SystemCommand("CPU Info", "Detailed CPU Information", lambda: self.push_screen(CPUDetails()))
+        yield SystemCommand("Save Report", "Save these data into file", lambda: self.push_screen(SaveScreen()))
 
     def on_mount(self):
         self.title = TITLE
@@ -650,3 +760,4 @@ if __name__ == '__main__':
     rprint("[cyan]INFO: Releasing drivers...")
     computer.Close()
     rprint("[green]DONE: Done![/]")
+    rprint("Exit Code: 0")
