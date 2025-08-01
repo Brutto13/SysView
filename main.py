@@ -551,10 +551,6 @@ class CPUDetails(Screen):
             Horizontal(TitledSection("[green]CPU Core Loads[/green]", self.loads_container), TitledSection("[green]CPU Voltages[/green]", self.volts_container))
         )
 
-#
-# class DiskDetails(Screen):
-#     def __init__(self):
-#         self.
 
 class SaveScreen(Screen):
     def compose(self) -> ComposeResult:
@@ -588,8 +584,18 @@ CPU Core Voltage: {round(data[CPU_NAME]["Voltage: CPU Core"], 3)} V
 
 ============ RAM DATA ============
 RAM Name:  {RAM_NAME}
-RAM Used:  {psutil.virtual_memory().used} GB
+RAM Used:  {round(psutil.virtual_memory().used/(1024**3), 1)} GB
 RAM Total: {RAM_DTCT} GB
+
+============ GPU-0 DATA ============
+GPU Name:....... {GPU_NAME0}
+GPU Usage:...... {GPUtil.getGPUs()[0].load if GPU_NAME0 is not "[red]Not Detected[/red]" else "N/A"} %
+GPU Temperature: {GPUtil.getGPUs()[0].temperature if GPU_NAME0 is not "[red]Not Detected[/red]" else "N/A"} *C
+
+============ GPU-1 DATA ============
+GPU Name:....... {GPU_NAME1}
+GPU Usage:...... {GPUtil.getGPUs()[1].load if GPU_NAME1 is not "[red]Not Detected[/red]" else "N/A"} %
+GPU Temperature: {GPUtil.getGPUs()[1].temperature if GPU_NAME1 is not "[red]Not Detected[/red]" else "N/A"} *C
 """
 
 
