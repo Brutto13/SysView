@@ -24,7 +24,7 @@ from textual.widget import Widget
 from textual.binding import Binding
 
 # Constants
-TITLE = "SysView 1.1.0"
+TITLE = "SysView 1.1.1"
 
 # Handle PyInstaller Splash Image
 try:
