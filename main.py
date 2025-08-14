@@ -430,14 +430,31 @@ class MainScreen(Screen):
         # Get HDD info
         hdd_rows = []
         # re-check available disks.
-        DRIVES = [p.device for p in psutil.disk_partitions()]
+        DRIVES = ["RAM", "SWAP"]
+        for p in psutil.disk_partitions():
+            DRIVES.append(p.device)
+        # DRIVES = [p.device for p in psutil.disk_partitions()]
         self.hdd_table.clear(columns=True)
         self.hdd_table.add_columns("Drive", "Used space", "Free Space", "Usage")
         for drive in DRIVES:
-            total, used, free = shutil.disk_usage(drive)
+            if drive == "RAM":
+                total = psutil.virtual_memory().total
+                used = psutil.virtual_memory().used
+                free = psutil.virtual_memory().free
+            elif drive == "SWAP":
+                total = psutil.swap_memory().total
+                used = psutil.swap_memory().used
+                free = psutil.swap_memory().free
+
+            else:
+                total, used, free = shutil.disk_usage(drive)
+
             hdd_rows.append(
-                (f"{drive}", f"{round(used/(1024**3), 1)} GB", f"{round(free/(1024**3), 1)} GB", f"{round(used*100/total, 1)} %")
+                (f"{drive}", f"{round(used / (1024 ** 3), 1)} GB",
+                 f"{round(free / (1024 ** 3), 1)} GB",
+                 f"{round(used * 100 / total, 1)} %")
             )
+
 
         for row in hdd_rows:
             self.hdd_table.add_row(*row)
@@ -707,6 +724,7 @@ class Launcher(App):
         self.app.push_screen(MainScreen())
 
 
+
 if __name__ == '__main__':
     rprint("BOOT: Entering program...")
     # rprint(get_sensor_data(computer))
@@ -757,8 +775,10 @@ if __name__ == '__main__':
     rprint(f"[cyan]INFO: Detected {len(DRIVES)} drives")
 
     rprint("BOOT: Closing Splash...")
+
     try: pyi_splash.close()
     except NameError: pass
+
     rprint("[cyan]INFO: Lauching app...[/]")
     Launcher().run()
     rprint("[cyan]INFO: App closed![/]")
