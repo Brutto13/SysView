@@ -8,3 +8,4 @@ build
 *.cmd
 *.ico
 *.png
+dll-container
