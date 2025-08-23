@@ -24,7 +24,7 @@ from textual.widget import Widget
 from textual.binding import Binding
 
 # Constants
-TITLE = "SysView 1.1.1"
+TITLE = "SysView 1.1.2"
 
 # Handle PyInstaller Splash Image
 try:
@@ -296,7 +296,7 @@ class MainScreen(Screen):
                 gpu0_fan_1_color = get_gpu_fan_color(gpu0_fan_1)
             except KeyError:
                 try:
-                    gpu0_fan_1 = gpu0_data['Fan: GPU Fan']
+                    gpu0_fan_1 = gpu0_data['Fan: GPU']
                     gpu0_fan_1_color = get_gpu_fan_color(gpu0_fan_1)
                 except KeyError:
                     gpu0_fan_1 = f"Not Detected"
@@ -378,14 +378,14 @@ class MainScreen(Screen):
             GPU_COLS.append(gpu.name.replace("NVIDIA GeForce", ""))
 
         GPU_ROWS = [
-            ("Core Load", f"[{gpu0_used_color}]{gpu0_used}[/] %", f"[{gpu1_used_color}]{gpu1_used}[/] %"),
+            ("GPU Core Load", f"[{gpu0_used_color}]{gpu0_used}[/] %", f"[{gpu1_used_color}]{gpu1_used}[/] %"),
             ("GPU Temperature", f"[{gpu0_temp_color}]{gpu0_temp}[/] *C", f"[{gpu1_temp_color}]{gpu1_temp}[/] *C"),
             ("GPU Power Usage", f"[{gpu0_power_color}]{gpu0_power}[/] W", f"[{gpu1_power_color}]{gpu1_power}[/] W"),
             ("GPU Core Clock", f"[{gpu0_clock_color}]{gpu0_clock}[/] MHz", f"[{gpu1_clock_color}]{gpu1_clock}[/] MHz"),
             ("GPU VRAM Usage", f"[{gpu0_vram_color}]{gpu0_vram_percent}[/] %", f"[{gpu1_vram_color}]{gpu1_vram_percent}[/] %"),
             ("GPU Fan 1 Speed", f"[{gpu0_fan_1_color}]{gpu0_fan_1}[/] RPM", f"[{gpu1_fan_1_color}]{gpu1_fan_1}[/] RPM"),
-            ("GPU Fan 1 Speed", f"[{gpu0_fan_2_color}]{gpu0_fan_2}[/] RPM", f"[{gpu1_fan_2_color}]{gpu1_fan_2}[/] RPM"),
-            ("GPU Fan 1 Speed", f"[{gpu0_fan_3_color}]{gpu0_fan_3}[/] RPM", f"[{gpu1_fan_3_color}]{gpu1_fan_3}[/] RPM")
+            ("GPU Fan 2 Speed", f"[{gpu0_fan_2_color}]{gpu0_fan_2}[/] RPM", f"[{gpu1_fan_2_color}]{gpu1_fan_2}[/] RPM"),
+            ("GPU Fan 3 Speed", f"[{gpu0_fan_3_color}]{gpu0_fan_3}[/] RPM", f"[{gpu1_fan_3_color}]{gpu1_fan_3}[/] RPM")
         ]
 
         self.gpu_table.add_columns(*GPU_COLS)
@@ -431,14 +431,14 @@ class MainScreen(Screen):
         if GPU_NAME1 != "[red]Not Detected[/red]":
             yield Container(
                 Horizontal(TitledSection("[cyan]System Overview[/cyan]", self.system_view), TitledSection(f"[green]{CPU_NAME}[/green]", self.cpu_view)),
-                Horizontal(TitledSection("[purple]GPU Data[/]", self.gpu0_view), TitledSection("[yellow]Disk drives Information[/yellow]", self.hdd_view))
+                Horizontal(TitledSection("[purple]GPU Data[/]", self.gpu0_view), TitledSection("[yellow]Memory Information[/yellow]", self.hdd_view))
             )
 
         # Show SysOverview, CPU data on top, Disk Info and only GPU on bottom
         else:
             yield Container(
                 Horizontal(TitledSection("[cyan]System Overview[/cyan]", self.system_view), TitledSection(f"[green]{CPU_NAME}[/green]", self.cpu_view)),
-                Horizontal(TitledSection(f"[blue]{GPU_NAME0}[/blue]", self.gpu0_view), TitledSection(f"[yellow]Disk drives Information[/yellow]", self.hdd_view))
+                Horizontal(TitledSection(f"[blue]{GPU_NAME0}[/blue]", self.gpu0_view), TitledSection(f"[yellow]Memory Information[/yellow]", self.hdd_view))
             )
         yield Footer()
 
