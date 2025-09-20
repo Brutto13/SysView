@@ -95,11 +95,13 @@ def get_sensor_data(computer):
 
 # Getting colors for data
 def get_color(value: float | int) -> str:
-    if value >= 95: return "red"
-    elif value >= 50: return "yellow"
-    elif value >= 10: return "green"
-    else: return "cyan"
-    # else: return "blue"
+    try:
+        if value >= 95: return "red"
+        elif value >= 50: return "yellow"
+        elif value >= 10: return "green"
+        else: return "cyan"
+    except TypeError:
+        return ""
 
 
 def get_cpu_freq_color(value: float | int) -> str:
@@ -109,21 +111,27 @@ def get_cpu_freq_color(value: float | int) -> str:
 
 
 def get_voltage_color(value: float | int) -> str:
-    if value >= 1.3: return "red"
-    elif value >= 1.2: return "yellow"
-    else: return "green"
+    try:
+        if value >= 1.3: return "red"
+        elif value >= 1.2: return "yellow"
+        else: return "green"
+    except TypeError: return ""
 
 
 def get_gpu_fan_color(value: float | int) -> str:
-    if value >= 2500: return "red"
-    elif value >= 1500: return "yellow"
-    else: return "green"
+    try:
+        if value >= 2500: return "red"
+        elif value >= 1500: return "yellow"
+        else: return "green"
+    except TypeError: return ""
 
 
 def get_gpu_clock_color(value: float | int) -> str:
-    if value >= 1500: return "red"
-    elif value >= 1000: return "yellow"
-    else: return "green"
+    try:
+        if value >= 1500: return "red"
+        elif value >= 1000: return "yellow"
+        else: return "green"
+    except TypeError: return ""
 
 
 def get_disk_info():
@@ -211,11 +219,7 @@ class MainScreen(Screen):
         self.label_cpu_power   = Label()
         self.label_cpu_voltage = Label()
 
-        # self.label_ram_status = Label()
-        # self.label_swp_status = Label()
-
         self.hdd_table = DataTable(cursor_type='none')
-
         self.gpu_table = DataTable(cursor_type='none')
 
         self.system_view = Vertical(
@@ -289,6 +293,8 @@ class MainScreen(Screen):
             gpu0_vram_total = gpu_data[0].memoryTotal
             gpu0_vram_percent = round((gpu0_vram_used/gpu0_vram_total)*100, 1)
             gpu0_vram_color = get_color(gpu0_vram_percent)
+            gpu0_vram_clock = gpu0_data['Clock: GPU Memory']
+            gpu0_vram_clock_color = get_gpu_clock_color(gpu0_vram_clock)
 
             # try fetch GPU Fans data (Not detected fallback if unavailable)
             try:
@@ -330,6 +336,8 @@ class MainScreen(Screen):
             gpu1_vram_total = gpu_data[1].memoryTotal
             gpu1_vram_percent = round((gpu1_vram_used/gpu1_vram_total)*100, 1)
             gpu1_vram_color = get_color(gpu1_vram_percent)
+            gpu0_vram_clock = gpu0_data['Clock: GPU Memory']
+            gpu0_vram_clock_color = get_gpu_clock_color(gpu0_vram_clock)
 
             # Try fetch GPU fans data (Not detected message fallback)
             try:
@@ -357,6 +365,8 @@ class MainScreen(Screen):
                 gpu1_fan_3 = f"Not Detected"
                 gpu1_fan_3_color = "red"
 
+
+
         # update Labels
         self.bus_clock.update(F"Bus Clock:   [cyan]{round(cpu_data['Clock: Bus Speed'], 2)}[/cyan] MHz")
 
@@ -365,28 +375,37 @@ class MainScreen(Screen):
         self.label_cpu_power.update(F"CPU Power:       [{cpu_power_color}]{round(cpu_power, 1)}[/{cpu_power_color}] W")
         self.label_cpu_tempC.update(F"CPU Temperature: [{cpu_temp_color}]{cpu_temp}[/{cpu_temp_color}] *C")
         self.label_cpu_voltage.update(F"CPU Voltage:     [{cpu_volt_color}]{round(cpu_volt, 3)}[/{cpu_volt_color}] V")
-
-        # self.label_ram_status.update(F"RAM Memory Used:  {ram_used} / {RAM_DTCT} GB ({round((ram_used/RAM_DTCT)*100, 1)} %)")
-        # self.label_swp_status.update(F"SWAP Memory Used:  {swap_used} /  {SWP_DTCT} GB ({round((swap_used/SWP_DTCT)*100, 1)} %)")
-
-        # Try to get GPU data. This data may not be available e.g. for internal graphics or on VM
         self.gpu_table.clear(columns=True)
-        # GPU_COLS = [gpu.name.replace("NVIDIA", "").replace("AMD") for gpu in gpu_data]
-        # GPU_COLS.insert(0, "")
+
+
         GPU_COLS = [""]
         for gpu in gpu_data:
             GPU_COLS.append(gpu.name.replace("NVIDIA GeForce", ""))
 
-        GPU_ROWS = [
-            ("GPU Core Load", f"[{gpu0_used_color}]{gpu0_used}[/] %", f"[{gpu1_used_color}]{gpu1_used}[/] %"),
-            ("GPU Temperature", f"[{gpu0_temp_color}]{gpu0_temp}[/] *C", f"[{gpu1_temp_color}]{gpu1_temp}[/] *C"),
-            ("GPU Power Usage", f"[{gpu0_power_color}]{gpu0_power}[/] W", f"[{gpu1_power_color}]{gpu1_power}[/] W"),
-            ("GPU Core Clock", f"[{gpu0_clock_color}]{gpu0_clock}[/] MHz", f"[{gpu1_clock_color}]{gpu1_clock}[/] MHz"),
-            ("GPU VRAM Usage", f"[{gpu0_vram_color}]{gpu0_vram_percent}[/] %", f"[{gpu1_vram_color}]{gpu1_vram_percent}[/] %"),
-            ("GPU Fan 1 Speed", f"[{gpu0_fan_1_color}]{gpu0_fan_1}[/] RPM", f"[{gpu1_fan_1_color}]{gpu1_fan_1}[/] RPM"),
-            ("GPU Fan 2 Speed", f"[{gpu0_fan_2_color}]{gpu0_fan_2}[/] RPM", f"[{gpu1_fan_2_color}]{gpu1_fan_2}[/] RPM"),
-            ("GPU Fan 3 Speed", f"[{gpu0_fan_3_color}]{gpu0_fan_3}[/] RPM", f"[{gpu1_fan_3_color}]{gpu1_fan_3}[/] RPM")
-        ]
+        if gpu1_data is not None:
+            GPU_ROWS = [
+                ("GPU Core Load", f"[{gpu0_used_color}]{gpu0_used}[/] %", f"[{gpu1_used_color}]{gpu1_used}[/] %"),
+                ("GPU Core Clock", f"[{gpu0_clock_color}]{gpu0_clock}[/] MHz", f"[{gpu1_clock_color}]{gpu1_clock}[/] MHz"),
+                ("GPU VRAM Usage", f"[{gpu0_vram_color}]{gpu0_vram_percent}[/] %", f"[{gpu1_vram_color}]{gpu1_vram_percent}[/] %"),
+                ("GPU VRAM Clock", f"[{gpu0_vram_clock_color}]{gpu0_vram_clock}[/] MHz", f""),
+                ("GPU Temperature", f"[{gpu0_temp_color}]{gpu0_temp}[/] *C", f"[{gpu1_temp_color}]{gpu1_temp}[/] *C"),
+                ("GPU Power Usage", f"[{gpu0_power_color}]{gpu0_power}[/] W", f"[{gpu1_power_color}]{gpu1_power}[/] W"),
+                ("GPU Fan 1 Speed", f"[{gpu0_fan_1_color}]{gpu0_fan_1}[/] RPM", f"[{gpu1_fan_1_color}]{gpu1_fan_1}[/] RPM"),
+                ("GPU Fan 2 Speed", f"[{gpu0_fan_2_color}]{gpu0_fan_2}[/] RPM", f"[{gpu1_fan_2_color}]{gpu1_fan_2}[/] RPM"),
+                ("GPU Fan 3 Speed", f"[{gpu0_fan_3_color}]{gpu0_fan_3}[/] RPM", f"[{gpu1_fan_3_color}]{gpu1_fan_3}[/] RPM")
+            ]
+        else:
+            GPU_ROWS = [
+                ("GPU Core Load", f"[{gpu0_used_color}]{gpu0_used}[/] %"),
+                ("GPU Core Clock", f"[{gpu0_clock_color}]{gpu0_clock}[/] MHz"),
+                ("GPU VRAM Usage", f"[{gpu0_vram_color}]{gpu0_vram_percent}[/] %"),
+                ("GPU VRAM Clock", f"[{gpu0_vram_clock_color}]{gpu0_vram_clock}[/] MHz", f""),
+                ("GPU Temperature", f"[{gpu0_temp_color}]{gpu0_temp}[/] *C"),
+                ("GPU Power Usage", f"[{gpu0_power_color}]{gpu0_power}[/] W"),
+                ("GPU Fan 1 Speed", f"[{gpu0_fan_1_color}]{gpu0_fan_1}[/] RPM"),
+                ("GPU Fan 2 Speed", f"[{gpu0_fan_2_color}]{gpu0_fan_2}[/] RPM"),
+                ("GPU Fan 3 Speed", f"[{gpu0_fan_3_color}]{gpu0_fan_3}[/] RPM")
+            ]
 
         self.gpu_table.add_columns(*GPU_COLS)
         for row in GPU_ROWS:
