@@ -12,19 +12,17 @@ import clr
 import win32com.client
 import psutil
 import GPUtil
-import subprocess
 
 from statistics import mean
 from rich import print as rprint
-from rich.console import Console
 from textual.app import App, Screen, ComposeResult, SystemCommand
 from textual.widgets import Header, Label, Footer, DataTable, Input, Select, Button
-from textual.containers import Container, Horizontal, Vertical, VerticalScroll
+from textual.containers import Container, Horizontal, Vertical
 from textual.widget import Widget
 from textual.binding import Binding
 
 # Constants
-TITLE = "SysView 1.1.2"
+TITLE = "SysView 1.1.3"
 
 # Handle PyInstaller Splash Image
 try:
@@ -45,9 +43,11 @@ rprint("[cyan]INFO: Configuring drivers...[/]")
 computer = Hardware.Computer()
 computer.IsCpuEnabled = True
 computer.IsGpuEnabled = True
-computer.IsMotherboardEnabled = False
-computeremoryEnabled = False
-computer.IsStorageEnabled = False
+computer.IsMemoryEnabled = True
+computer.IsMotherboardEnabled = True
+computer.IsControllerEnabled = True
+computer.IsNetworkEnabled = True
+computer.IsStorageEnabled = True
 computer.Open()
 
 
@@ -122,15 +122,18 @@ def get_gpu_fan_color(value: float | int) -> str:
     try:
         if value >= 2500: return "red"
         elif value >= 1500: return "yellow"
-        else: return "green"
+        elif value >= 500: return "green"
+        elif value >= 100: return "cyan"
+        else: return "bold red"
     except TypeError: return ""
 
 
 def get_gpu_clock_color(value: float | int) -> str:
     try:
-        if value >= 1500: return "red"
-        elif value >= 1000: return "yellow"
-        else: return "green"
+        if value >= 1800: return "red"
+        elif value >= 1500: return "yellow"
+        elif value >= 1000: return "green"
+        else: return "cyan"
     except TypeError: return ""
 
 
@@ -171,7 +174,7 @@ def get_cpu_name():
             return hardware.Name
 
 
-def get_gpu_name(computer):
+def get_gpu_names(computer):
     gpu_names = []
     for hardware in computer.Hardware:
         hw_type = str(hardware.HardwareType)
@@ -284,6 +287,14 @@ class MainScreen(Screen):
             gpu0_used = round(gpu_data[0].load*100, 1)
             gpu0_used_color = get_color(gpu0_used)
             gpu0_temp = gpu0_data['Temperature: GPU Core']
+
+            try:
+                gpu0_vram_temp = gpu0_data['Temperature: GPU Memory Junction']
+                gpu0_vram_temp_color = get_color(gpu0_vram_temp)
+            except KeyError:
+                gpu0_vram_temp = "Not Available"
+                gpu0_vram_temp_color = 'red'
+
             gpu0_temp_color = get_color(gpu0_temp)
             gpu0_power = round(gpu0_data['Power: GPU Package'], 1)
             gpu0_power_color = get_color(gpu0_power)
@@ -293,7 +304,7 @@ class MainScreen(Screen):
             gpu0_vram_total = gpu_data[0].memoryTotal
             gpu0_vram_percent = round((gpu0_vram_used/gpu0_vram_total)*100, 1)
             gpu0_vram_color = get_color(gpu0_vram_percent)
-            gpu0_vram_clock = gpu0_data['Clock: GPU Memory']
+            gpu0_vram_clock = round(gpu0_data['Clock: GPU Memory'])
             gpu0_vram_clock_color = get_gpu_clock_color(gpu0_vram_clock)
 
             # try fetch GPU Fans data (Not detected fallback if unavailable)
@@ -336,8 +347,14 @@ class MainScreen(Screen):
             gpu1_vram_total = gpu_data[1].memoryTotal
             gpu1_vram_percent = round((gpu1_vram_used/gpu1_vram_total)*100, 1)
             gpu1_vram_color = get_color(gpu1_vram_percent)
-            gpu0_vram_clock = gpu0_data['Clock: GPU Memory']
-            gpu0_vram_clock_color = get_gpu_clock_color(gpu0_vram_clock)
+            gpu1_vram_clock = round(gpu1_data['Clock: GPU Memory'])
+            gpu1_vram_clock_color = get_gpu_clock_color(gpu1_vram_clock)
+            try:
+                gpu1_vram_temp = round(gpu1_data['Temperature: GPU Memory Junction'], 1)
+                gpu1_vram_temp_color = get_color(gpu1_vram_temp)
+            except KeyError:
+                gpu1_vram_temp = "Not Available"
+                gpu1_vram_temp_color = 'red'
 
             # Try fetch GPU fans data (Not detected message fallback)
             try:
@@ -385,11 +402,12 @@ class MainScreen(Screen):
         if gpu1_data is not None:
             GPU_ROWS = [
                 ("GPU Core Load", f"[{gpu0_used_color}]{gpu0_used}[/] %", f"[{gpu1_used_color}]{gpu1_used}[/] %"),
-                ("GPU Core Clock", f"[{gpu0_clock_color}]{gpu0_clock}[/] MHz", f"[{gpu1_clock_color}]{gpu1_clock}[/] MHz"),
                 ("GPU VRAM Usage", f"[{gpu0_vram_color}]{gpu0_vram_percent}[/] %", f"[{gpu1_vram_color}]{gpu1_vram_percent}[/] %"),
-                ("GPU VRAM Clock", f"[{gpu0_vram_clock_color}]{gpu0_vram_clock}[/] MHz", f""),
-                ("GPU Temperature", f"[{gpu0_temp_color}]{gpu0_temp}[/] *C", f"[{gpu1_temp_color}]{gpu1_temp}[/] *C"),
+                ("GPU Core Clock", f"[{gpu0_clock_color}]{gpu0_clock}[/] MHz", f"[{gpu1_clock_color}]{gpu1_clock}[/] MHz"),
+                ("GPU VRAM Clock", f"[{gpu0_vram_clock_color}]{gpu0_vram_clock}[/] MHz", f"[{gpu1_vram_clock_color}]{gpu1_vram_clock}[/] MHz"),
                 ("GPU Power Usage", f"[{gpu0_power_color}]{gpu0_power}[/] W", f"[{gpu1_power_color}]{gpu1_power}[/] W"),
+                ("GPU Core Temperature", f"[{gpu0_temp_color}]{gpu0_temp}[/] *C", f"[{gpu1_temp_color}]{gpu1_temp}[/] *C"),
+                ("GPU VRAM Temperature", f"[{gpu0_vram_temp_color}]{gpu0_vram_temp}[/] *C", f"[{gpu1_vram_temp_color}]{gpu1_vram_temp}[/] *C"),
                 ("GPU Fan 1 Speed", f"[{gpu0_fan_1_color}]{gpu0_fan_1}[/] RPM", f"[{gpu1_fan_1_color}]{gpu1_fan_1}[/] RPM"),
                 ("GPU Fan 2 Speed", f"[{gpu0_fan_2_color}]{gpu0_fan_2}[/] RPM", f"[{gpu1_fan_2_color}]{gpu1_fan_2}[/] RPM"),
                 ("GPU Fan 3 Speed", f"[{gpu0_fan_3_color}]{gpu0_fan_3}[/] RPM", f"[{gpu1_fan_3_color}]{gpu1_fan_3}[/] RPM")
@@ -397,11 +415,12 @@ class MainScreen(Screen):
         else:
             GPU_ROWS = [
                 ("GPU Core Load", f"[{gpu0_used_color}]{gpu0_used}[/] %"),
-                ("GPU Core Clock", f"[{gpu0_clock_color}]{gpu0_clock}[/] MHz"),
                 ("GPU VRAM Usage", f"[{gpu0_vram_color}]{gpu0_vram_percent}[/] %"),
-                ("GPU VRAM Clock", f"[{gpu0_vram_clock_color}]{gpu0_vram_clock}[/] MHz", f""),
-                ("GPU Temperature", f"[{gpu0_temp_color}]{gpu0_temp}[/] *C"),
+                ("GPU Core Clock", f"[{gpu0_clock_color}]{gpu0_clock}[/] MHz"),
+                ("GPU VRAM Clock", f"[{gpu0_vram_clock_color}]{gpu0_vram_clock}[/] MHz"),
                 ("GPU Power Usage", f"[{gpu0_power_color}]{gpu0_power}[/] W"),
+                ("GPU Core Temperature", f"[{gpu0_temp_color}]{gpu0_temp}[/] *C"),
+                ("GPU VRAM Temperature", f"[{gpu0_vram_temp_color}]{gpu0_vram_temp}[/] *C"),
                 ("GPU Fan 1 Speed", f"[{gpu0_fan_1_color}]{gpu0_fan_1}[/] RPM"),
                 ("GPU Fan 2 Speed", f"[{gpu0_fan_2_color}]{gpu0_fan_2}[/] RPM"),
                 ("GPU Fan 3 Speed", f"[{gpu0_fan_3_color}]{gpu0_fan_3}[/] RPM")
@@ -415,29 +434,39 @@ class MainScreen(Screen):
         # Get HDD info
         hdd_rows = []
         # re-check available disks.
-        DRIVES = ["RAM", "SWAP"]
+        drives = ["RAM", "SWAP"]
         for p in psutil.disk_partitions():
-            DRIVES.append(p.device)
+            drives.append(p.device)
         # DRIVES = [p.device for p in psutil.disk_partitions()]
         self.hdd_table.clear(columns=True)
         self.hdd_table.add_columns("Drive", "Used space", "Free Space", "Usage")
-        for drive in DRIVES:
+        for drive in drives:
             if drive == "RAM":
                 total = psutil.virtual_memory().total
                 used = psutil.virtual_memory().used
                 free = psutil.virtual_memory().free
+                percent = round((used/total)*100, 1)
+
             elif drive == "SWAP":
                 total = psutil.swap_memory().total
                 used = psutil.swap_memory().used
                 free = psutil.swap_memory().free
+                percent = round((used / total) * 100, 1)
 
             else:
-                total, used, free = shutil.disk_usage(drive)
+                try:
+                    total, used, free = shutil.disk_usage(drive)
+                    percent = round((used / total) * 100, 1)
+                except OSError:
+                    total = used = free = "N/A"
+                    percent = None
 
+            if percent is not None: color = get_color(percent)
+            else: color = 'red'
             hdd_rows.append(
-                (f"{drive}", f"{round(used / (1024 ** 3), 1)} GB",
-                 f"{round(free / (1024 ** 3), 1)} GB",
-                 f"{round(used * 100 / total, 1)} %")
+                (f"{drive}", f"[{color}]{round(used / (1024 ** 3), 1)} [/]GB",
+                 f"[{color}]{round(free / (1024 ** 3), 1)} [/]GB",
+                 f"[{color}]{round(used * 100 / total, 1)} [/]%")
             )
 
 
@@ -446,19 +475,10 @@ class MainScreen(Screen):
 
     def compose(self) -> ComposeResult:
         yield Header()
-        # Show SysOverview, CPU data and Disk Info on top, both GPU on bottom (if possible)
-        if GPU_NAME1 != "[red]Not Detected[/red]":
-            yield Container(
-                Horizontal(TitledSection("[cyan]System Overview[/cyan]", self.system_view), TitledSection(f"[green]{CPU_NAME}[/green]", self.cpu_view)),
-                Horizontal(TitledSection("[purple]GPU Data[/]", self.gpu0_view), TitledSection("[yellow]Memory Information[/yellow]", self.hdd_view))
-            )
-
-        # Show SysOverview, CPU data on top, Disk Info and only GPU on bottom
-        else:
-            yield Container(
-                Horizontal(TitledSection("[cyan]System Overview[/cyan]", self.system_view), TitledSection(f"[green]{CPU_NAME}[/green]", self.cpu_view)),
-                Horizontal(TitledSection(f"[blue]{GPU_NAME0}[/blue]", self.gpu0_view), TitledSection(f"[yellow]Memory Information[/yellow]", self.hdd_view))
-            )
+        yield Container(
+            Horizontal(TitledSection("[cyan]System Overview[/cyan]", self.system_view), TitledSection(f"[green]{CPU_NAME}[/green]", self.cpu_view)),
+            Horizontal(TitledSection("[blue]GPU Data[/]", self.gpu0_view), TitledSection("[yellow]Memory Information[/yellow]", self.hdd_view))
+        )
         yield Footer()
 
 
@@ -591,13 +611,13 @@ RAM Total: {RAM_DTCT} GB
 
 ============ GPU-0 DATA ============
 GPU Name:....... {GPU_NAME0}
-GPU Usage:...... {GPUtil.getGPUs()[0].load if GPU_NAME0 is not "[red]Not Detected[/red]" else "N/A"} %
-GPU Temperature: {GPUtil.getGPUs()[0].temperature if GPU_NAME0 is not "[red]Not Detected[/red]" else "N/A"} *C
+GPU Usage:...... {GPUtil.getGPUs()[0].load if GPU_NAME0 != "[red]Not Detected[/red]" else "N/A"} %
+GPU Temperature: {GPUtil.getGPUs()[0].temperature if GPU_NAME0 != "[red]Not Detected[/red]" else "N/A"} *C
 
 ============ GPU-1 DATA ============
 GPU Name:....... {GPU_NAME1}
-GPU Usage:...... {GPUtil.getGPUs()[1].load if GPU_NAME1 is not "[red]Not Detected[/red]" else "N/A"} %
-GPU Temperature: {GPUtil.getGPUs()[1].temperature if GPU_NAME1 is not "[red]Not Detected[/red]" else "N/A"} *C
+GPU Usage:...... {GPUtil.getGPUs()[1].load if GPU_NAME1 != "[red]Not Detected[/red]" else "N/A"} %
+GPU Temperature: {GPUtil.getGPUs()[1].temperature if GPU_NAME1 != "[red]Not Detected[/red]" else "N/A"} *C
 """
 
 
