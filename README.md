@@ -5,7 +5,7 @@ access to information like CPU Usage, Temperatures, Voltages etc.
 
 ## External dependencies
 This project requires an LibreHardwareMonitorLib (version 0.9.4.0) project in dll-container file.
-If you are downloading release this is included to application automatically
+If you are downloading release this is included by the installer.
 
 ### CPU Information
 Application shows following CPU Information (package and per-core)
@@ -18,17 +18,15 @@ Application shows following CPU Information (package and per-core)
 ### GPU Information
 Application shows following GPU data.
 **Up to 2 GPUs are supported.**
-+ GPU Core Load
-+ GPU Temperature
-+ GPU Core Clock
-+ VRAM Usage
-+ Fan 1, 2 and 3 speeds
++ GPU Core and VRAM Usage
++ GPU Core and VRAM Temperature (VRAM temperature may not be available for GDDR5 and older)
++ GPU Core and VRAM Clock
++ GPU Fan speeds
 
 ### Memory Information
 Following information about memory are available:
 + RAM usage
-+ SWAP memory usage
-+ Disk usages
++ SWAP memory usage (HDD space used by OS as RAM memory)
++ Disks usages
 
-This data is updated with global tick update so if USB drive is inserted or removed
-this table will change.
+**All data provided are updated about every 0.5s**
