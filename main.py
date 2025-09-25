@@ -93,6 +93,7 @@ def get_sensor_data(computer):
     # computer.Close()
     return sensor_info
 
+
 # Getting colors for data
 def get_color(value: float | int) -> str:
     try:
@@ -194,6 +195,14 @@ def get_cpu_cache():
     return result
 
 
+def get_motherboard_info(computer):
+    # Initialize computer and enable motherboard
+    for hardware in computer.Hardware:
+        if hardware.HardwareType == Hardware.HardwareType.Motherboard:
+            hardware.Update()
+            return {hardware.Name}
+
+
 def get_ram_name():
     c = wmi.WMI()
     mem = c.Win32_PhysicalMemory()[0]
@@ -222,16 +231,13 @@ class MainScreen(Screen):
         self.label_cpu_power   = Label()
         self.label_cpu_voltage = Label()
 
+        self.mb_dtable = DataTable(cursor_type='none')
         self.hdd_table = DataTable(cursor_type='none')
         self.gpu_table = DataTable(cursor_type='none')
+        self.volt_table = DataTable(cursor_type='none')
 
         self.system_view = Vertical(
-            Label(f"CPU Name:    [green]{CPU_NAME}[/green]"),
-            Label(f"RAM Name:    [yellow]{RAM_NAME}[/yellow] (JEDEC ID)"),
-            Label(f"BOOT TIME:   [cyan]{BOOT_TIME}[/cyan]"),
-            self.bus_clock,
-            Label(f"GPU #0 Name: [purple]{GPU_NAME0}[/purple]"),
-            Label(f"GPU #1 Name: [blue]{GPU_NAME1}[/blue]")
+            self.mb_dtable
         )
 
         self.cpu_view = Vertical(
@@ -430,6 +436,24 @@ class MainScreen(Screen):
         for row in GPU_ROWS:
             self.gpu_table.add_row(*row)
 
+        mb_cols = ["Device", "Name"]
+        mb_rows = [
+            ("CPU Installed", f"[green]{CPU_NAME}[/]"),
+            ("RAM Installed", f"[yellow]{RAM_DTCT}[/] GB"),
+            ("GPU Installed", f"[purple]{GPU_NAME0}[/]"),
+            ("GPU Installed", f"[blue]{GPU_NAME1}[/]"),
+            ("Voltage +3.3V", f"[cyan]{sensor_data[MB_NAME]['Voltage: +3.3V']:.3f}[/] V"),
+            ("Voltage +5V",  f"[cyan]{sensor_data[MB_NAME]['Voltage: +5V']:.3f}[/] V"),
+            ("Voltage +12V", f"[cyan]{sensor_data[MB_NAME]['Voltage: +12V']:.3f}[/] V"),
+            ("CPU Fan speed", f"[green]{sensor_data[MB_NAME]['Fan: CPU Fan']:.1f}[/] RPM")
+        ]
+        self.mb_dtable.clear(columns=True)
+        self.mb_dtable.add_columns(*mb_cols)
+
+        for row in mb_rows: self.mb_dtable.add_row(*row)
+
+
+        # if GPU_NAME1 != "[red]Not Detected[/red]": mb_rows.append(("GPU Installed", f"[blue]{GPU_NAME1}[/]"))
 
         # Get HDD info
         hdd_rows = []
@@ -477,7 +501,7 @@ class MainScreen(Screen):
     def compose(self) -> ComposeResult:
         yield Header()
         yield Container(
-            Horizontal(TitledSection("[cyan]System Overview[/cyan]", self.system_view), TitledSection(f"[green]{CPU_NAME}[/green]", self.cpu_view)),
+            Horizontal(TitledSection(f"[cyan]{MB_NAME}[/cyan]", self.system_view), TitledSection(f"[green]{CPU_NAME}[/green]", self.cpu_view)),
             Horizontal(TitledSection("[blue]GPU Data[/]", self.gpu0_view), TitledSection("[yellow]Memory Information[/yellow]", self.hdd_view))
         )
         yield Footer()
@@ -575,6 +599,69 @@ class CPUDetails(Screen):
         )
 
 
+class MotherBoardScreen(Screen):
+    def __init__(self):
+        super().__init__()
+        self.timer = None
+
+        self.devices_table = DataTable(cursor_type='none')
+        self.temperatures_table = DataTable(cursor_type='none')
+        self.voltages_table = DataTable(cursor_type='none')
+        self.fans_table = DataTable(cursor_type='none')
+
+        devices_columns = ["Device Type", "Device Name"]
+        temperatures_columns = ["Sensor", "Value"]
+
+        self.devices_table.add_columns(*devices_columns)
+        self.temperatures_table.add_columns(*temperatures_columns)
+
+    def chk_vals(self):
+        sensor_data = get_sensor_data(computer)
+
+
+        devices_rows = [
+            ("CPU Installed", f"[green]{CPU_NAME}[/]"),
+            ("RAM Installed", f"[yellow]{RAM_DTCT*1024}[/] MB"),
+            ("GPU Installed", f"[purple]{GPU_NAME0}[/]"),
+            ("GPU Installed", f"[blue]{GPU_NAME1}[/]")
+        ]
+        self.devices_table.clear(columns=False)
+        for row in devices_rows:
+            self.devices_table.add_row(*row)
+
+        cpu_temp = sensor_data[MB_NAME]['Temperature: CPU']
+        pch_temp = sensor_data[MB_NAME]['Temperature: PCH']
+        vrm_temp = sensor_data[MB_NAME]['Temperature: VRM MOS']
+        pci_temp = sensor_data[MB_NAME]['Temperature: PCIe x16']
+        temperatures_rows = [
+            ("CPU Temperature", f"[{get_color(cpu_temp)}]{cpu_temp}[/] *C"),
+            ("PCH Temperature", f"[{get_color(pch_temp)}]{pch_temp}[/] *C"),
+            ("VRM Temperature", f"[{get_color(vrm_temp)}]{vrm_temp}[/] *C"),
+            ("PCIe x16 Temperature", f"[{get_color(pci_temp)}]{pci_temp}[/] *C")
+        ]
+
+        done = False
+        iter = 1
+        while not done:
+            try:
+                temp_data = sensor_data[MB_NAME][f'Temperature: System #{iter}']
+                temperatures_rows.append((f"System #{iter} Temperature", f"[{get_gpu_fan_color(temp_data)}]{temp_data}[/] *C"))
+                iter += 1
+            except KeyError: done = True
+
+        self.temperatures_table.clear(columns=False)
+        for row in temperatures_rows: self.temperatures_table.add_row(*row)
+
+    def _on_screen_resume(self) -> None: self.timer = self.app.set_interval(.5, self.chk_vals)
+    def _on_screen_suspend(self) -> None: self.timer.stop()
+
+    def compose(self) -> ComposeResult:
+        yield Vertical(
+            Horizontal(TitledSection("[cyan]Devices Installed[/]", self.devices_table), TitledSection("[cyan]Temperatures[/]", self.temperatures_table)),
+            Horizontal(TitledSection("[cyan]Voltages[/]", Label("future 3")), TitledSection("[cyan]Fans[/]", Label("future 4")))
+        )
+
+
 class SaveScreen(Screen):
     def compose(self) -> ComposeResult:
         yield Header()
@@ -659,6 +746,7 @@ class FileSavedInfo(Screen):
     def on_button_pressed(self, event):
         self.app.pop_screen()
 
+
 class Launcher(App):
     CSS = """
     
@@ -723,6 +811,7 @@ class Launcher(App):
         yield SystemCommand("Quit", "Quit the app", sys.exit)
         yield SystemCommand("Main Screen", "Go to main screen", lambda: self.push_screen(MainScreen()))
         yield SystemCommand("CPU Info", "Detailed CPU Information", lambda: self.push_screen(CPUDetails()))
+        yield SystemCommand("Mother Board Info", "Detailed Information about System", lambda: self.push_screen(MotherBoardScreen()))
         yield SystemCommand("Save Report", "Save these data into file", lambda: self.push_screen(SaveScreen()))
 
     def on_mount(self):
@@ -742,6 +831,7 @@ if __name__ == '__main__':
 
     rprint("[cyan]INFO: Retrieving hardware information...[/]")
     CPU_NAME = get_cpu_name()
+    MB_NAME = list(get_motherboard_info(computer))[0]
     CPU_FREQ = psutil.cpu_freq()
     CPU_CACHE = get_cpu_cache()
 
