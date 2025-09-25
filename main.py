@@ -22,7 +22,7 @@ from textual.widget import Widget
 from textual.binding import Binding
 
 # Constants
-TITLE = "SysView 1.1.3"
+TITLE = "SysView 1.2.0"
 
 # Handle PyInstaller Splash Image
 try:
@@ -439,7 +439,7 @@ class MainScreen(Screen):
             drives.append(p.device)
         # DRIVES = [p.device for p in psutil.disk_partitions()]
         self.hdd_table.clear(columns=True)
-        self.hdd_table.add_columns("Drive", "Used space", "Free Space", "Usage")
+        self.hdd_table.add_columns("Drive", "Used space", "Free Space", "Total Space", "Usage")
         for drive in drives:
             if drive == "RAM":
                 total = psutil.virtual_memory().total
@@ -466,6 +466,7 @@ class MainScreen(Screen):
             hdd_rows.append(
                 (f"{drive}", f"[{color}]{round(used / (1024 ** 3), 1)} [/]GB",
                  f"[{color}]{round(free / (1024 ** 3), 1)} [/]GB",
+                 f"[{color}]{round(total / (1024 ** 3), 1)} [/]GB",
                  f"[{color}]{round(used * 100 / total, 1)} [/]%")
             )
 
