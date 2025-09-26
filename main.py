@@ -499,7 +499,7 @@ class MainScreen(Screen):
             self.hdd_table.add_row(*row)
 
     def compose(self) -> ComposeResult:
-        yield Header()
+        yield Header(icon='More...', show_clock=True)
         yield Container(
             Horizontal(TitledSection(f"[cyan]{MB_NAME}[/cyan]", self.system_view), TitledSection(f"[green]{CPU_NAME}[/green]", self.cpu_view)),
             Horizontal(TitledSection("[blue]GPU Data[/]", self.gpu0_view), TitledSection("[yellow]Memory Information[/yellow]", self.hdd_view))
@@ -592,11 +592,12 @@ class CPUDetails(Screen):
         self.timer.stop()
 
     def compose(self) -> ComposeResult:
-        yield Header()
+        yield Header(icon='More...', show_clock=True)
         yield Container(
             Horizontal(TitledSection("[green]CPU Temperatures[/green]", self.temps_container), TitledSection("[green]CPU Clocks[/green]", self.clock_container)),
             Horizontal(TitledSection("[green]CPU Core Loads[/green]", self.loads_container), TitledSection("[green]CPU Voltages[/green]", self.volts_container))
         )
+        yield Footer()
 
 
 class MotherBoardScreen(Screen):
@@ -611,9 +612,11 @@ class MotherBoardScreen(Screen):
 
         devices_columns = ["Device Type", "Device Name"]
         temperatures_columns = ["Sensor", "Value"]
+        voltages_columns = ["Voltage", "Value"]
 
         self.devices_table.add_columns(*devices_columns)
         self.temperatures_table.add_columns(*temperatures_columns)
+        self.voltages_table.add_columns(*voltages_columns)
 
     def chk_vals(self):
         sensor_data = get_sensor_data(computer)
@@ -645,21 +648,37 @@ class MotherBoardScreen(Screen):
         while not done:
             try:
                 temp_data = sensor_data[MB_NAME][f'Temperature: System #{iter}']
-                temperatures_rows.append((f"System #{iter} Temperature", f"[{get_gpu_fan_color(temp_data)}]{temp_data}[/] *C"))
+                temperatures_rows.append((f"System #{iter} Temperature", f"[{get_color(temp_data)}]{temp_data}[/] *C"))
                 iter += 1
             except KeyError: done = True
 
         self.temperatures_table.clear(columns=False)
         for row in temperatures_rows: self.temperatures_table.add_row(*row)
 
+        voltages_rows = [
+            ("+3.3V", f"[cyan]{sensor_data[MB_NAME]['Voltage: +3.3V']:.3f}[/] V"),
+            ("+5V", f"[cyan]{sensor_data[MB_NAME]['Voltage: +5V']:.3f}[/] V"),
+            ("+12V", f"[cyan]{sensor_data[MB_NAME]['Voltage: +12V']:.3f}[/] V"),
+            ("CPU Memory Manager", f"[cyan]{sensor_data[MB_NAME]['Voltage: CPU System Agent']:.3f}[/] V"),
+            ("PCH Core Voltage", f"[cyan]{sensor_data[MB_NAME]['Voltage: PCHCore']:.3f}[/] V"),
+            ("CPU I/O Voltage", f"[cyan]{sensor_data[MB_NAME]['Voltage: CPU VCCIO']:.3f}[/] V"),
+            ("DRAM Voltage", f"[cyan]{sensor_data[MB_NAME]['Voltage: VDDQ']:.3f}[/] V")
+        ]
+
+        self.voltages_table.clear(columns=False)
+        for row in voltages_rows: self.voltages_table.add_row(*row)
+
+
     def _on_screen_resume(self) -> None: self.timer = self.app.set_interval(.5, self.chk_vals)
     def _on_screen_suspend(self) -> None: self.timer.stop()
 
     def compose(self) -> ComposeResult:
+        yield Header(icon='More...', show_clock=True)
         yield Vertical(
             Horizontal(TitledSection("[cyan]Devices Installed[/]", self.devices_table), TitledSection("[cyan]Temperatures[/]", self.temperatures_table)),
-            Horizontal(TitledSection("[cyan]Voltages[/]", Label("future 3")), TitledSection("[cyan]Fans[/]", Label("future 4")))
+            Horizontal(TitledSection("[cyan]Voltages[/]", self.voltages_table), TitledSection("[cyan]Fans[/]", Label("future 4")))
         )
+        yield Footer()
 
 
 class SaveScreen(Screen):
@@ -808,10 +827,10 @@ class Launcher(App):
     ]
 
     def get_system_commands(self, screen: Screen) -> Iterable[SystemCommand]:
-        yield SystemCommand("Quit", "Quit the app", sys.exit)
-        yield SystemCommand("Main Screen", "Go to main screen", lambda: self.push_screen(MainScreen()))
-        yield SystemCommand("CPU Info", "Detailed CPU Information", lambda: self.push_screen(CPUDetails()))
-        yield SystemCommand("Mother Board Info", "Detailed Information about System", lambda: self.push_screen(MotherBoardScreen()))
+        yield SystemCommand("[red]Quit[/]", "[red]Quit the app[/]", sys.exit)
+        yield SystemCommand("[yellow]Main Screen[/]", "[yellow]Go to main screen[/]", lambda: self.push_screen(MainScreen()))
+        yield SystemCommand("[green]CPU Info[/]", "[green]Detailed CPU Information[/]", lambda: self.push_screen(CPUDetails()))
+        yield SystemCommand("[cyan]Mother Board Info[/]", "[cyan]Detailed Information about System[/]", lambda: self.push_screen(MotherBoardScreen()))
         yield SystemCommand("Save Report", "Save these data into file", lambda: self.push_screen(SaveScreen()))
 
     def on_mount(self):
