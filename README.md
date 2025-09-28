@@ -9,6 +9,16 @@ This project requires an LibreHardwareMonitorLib (version 0.9.4.0) project in dl
 If you are downloading release this is included by the installer.
 This project requires to enable WMI service if Windows 11 is used.
 
+### BIOS information
+- Voltage on +3.3V, +5V, +12V lines
+- CPU Core and I/O Voltage
+- PCH (MB chipset) Voltage
+- DRAM Voltage
+- CPU MB sensor Temperature
+- PCH (MB chipset) temperature
+- PCIe x16 device temperature
+- System #X temperatures
+
 ### CPU Information
 Application shows following CPU Information (package and per-core)
 + CPU Usage
@@ -32,4 +42,4 @@ Following information about memory are available:
 + SWAP memory usage (HDD space used by OS as RAM memory)
 + Disks usages (WMI)
 
-**All data provided are updated about every 0.5s**
+**All data provided are updated every 0.5s**

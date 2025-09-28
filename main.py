@@ -613,10 +613,12 @@ class MotherBoardScreen(Screen):
         devices_columns = ["Device Type", "Device Name"]
         temperatures_columns = ["Sensor", "Value"]
         voltages_columns = ["Voltage", "Value"]
+        fans_columns = ["Fan Name", "Speed"]
 
         self.devices_table.add_columns(*devices_columns)
         self.temperatures_table.add_columns(*temperatures_columns)
         self.voltages_table.add_columns(*voltages_columns)
+        self.fans_table.add_columns(*fans_columns)
 
     def chk_vals(self):
         sensor_data = get_sensor_data(computer)
@@ -668,6 +670,22 @@ class MotherBoardScreen(Screen):
         self.voltages_table.clear(columns=False)
         for row in voltages_rows: self.voltages_table.add_row(*row)
 
+        fans_rows = [
+            ("CPU Fan", f"[cyan]{sensor_data[MB_NAME]['Fan: CPU Fan']:.1f}[/] RPM"),
+        ]
+
+        i = 1
+        scanning = True
+        while scanning:
+            try:
+                speed = str(round(sensor_data[MB_NAME][f'Fan: System Fan #{i}'], 1))
+                fans_rows.append((f"System #{i}", f"[cyan]{speed + '[/] RPM' if speed != '0.0' else '[red]Not Connected[/]'}"))
+            except KeyError: scanning = False
+            else: i += 1
+
+        self.fans_table.clear(columns=False)
+        for row in fans_rows: self.fans_table.add_row(*row)
+
 
     def _on_screen_resume(self) -> None: self.timer = self.app.set_interval(.5, self.chk_vals)
     def _on_screen_suspend(self) -> None: self.timer.stop()
@@ -676,7 +694,7 @@ class MotherBoardScreen(Screen):
         yield Header(icon='More...', show_clock=True)
         yield Vertical(
             Horizontal(TitledSection("[cyan]Devices Installed[/]", self.devices_table), TitledSection("[cyan]Temperatures[/]", self.temperatures_table)),
-            Horizontal(TitledSection("[cyan]Voltages[/]", self.voltages_table), TitledSection("[cyan]Fans[/]", Label("future 4")))
+            Horizontal(TitledSection("[cyan]Voltages[/]", self.voltages_table), TitledSection("[cyan]Fans[/]", self.fans_table))
         )
         yield Footer()
 
@@ -726,7 +744,6 @@ GPU Name:....... {GPU_NAME1}
 GPU Usage:...... {GPUtil.getGPUs()[1].load if GPU_NAME1 != "[red]Not Detected[/red]" else "N/A"} %
 GPU Temperature: {GPUtil.getGPUs()[1].temperature if GPU_NAME1 != "[red]Not Detected[/red]" else "N/A"} *C
 """
-
 
             elif mode == "json":
                 content = json.dumps(get_sensor_data(computer))
@@ -828,7 +845,7 @@ class Launcher(App):
 
     def get_system_commands(self, screen: Screen) -> Iterable[SystemCommand]:
         yield SystemCommand("[red]Quit[/]", "[red]Quit the app[/]", sys.exit)
-        yield SystemCommand("[yellow]Main Screen[/]", "[yellow]Go to main screen[/]", lambda: self.push_screen(MainScreen()))
+        yield SystemCommand("[blue]Main Screen[/]", "[blue]Go to main screen[/]", lambda: self.push_screen(MainScreen()))
         yield SystemCommand("[green]CPU Info[/]", "[green]Detailed CPU Information[/]", lambda: self.push_screen(CPUDetails()))
         yield SystemCommand("[cyan]Mother Board Info[/]", "[cyan]Detailed Information about System[/]", lambda: self.push_screen(MotherBoardScreen()))
         yield SystemCommand("Save Report", "Save these data into file", lambda: self.push_screen(SaveScreen()))
